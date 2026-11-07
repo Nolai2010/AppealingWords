@@ -5,7 +5,7 @@
  * ============================================================ */
 
 const STORAGE_KEY = 'appealingwords.v1';
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const SCHEMA_VERSION = 1;
 const MAX_SESSIONS = 40;
 const MAX_MESSAGES = 200;

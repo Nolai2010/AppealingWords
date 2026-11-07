@@ -12,6 +12,7 @@ import {
   PROVIDER_PRESETS,
 } from './i18n.js';
 import { MODES, buildSystemPrompt, OPENING_MESSAGE, FALLBACK_CHOICES } from './prompt.js';
+import { GUIDE_STEPS, GUIDE_CONCEPTS, GUIDE_PROVIDERS, GUIDE_FAQ } from './guide.js';
 import * as store from './store.js';
 import { streamChat, testConnection, parseExtraHeaders, isAbortError } from './api.js';
 import {
@@ -46,6 +47,7 @@ const ui = {
   presetId: null,
   lastFocus: null,
   statusKind: 'ready',
+  guideTarget: 'onboarding',
   booted: false,
 };
 
@@ -111,6 +113,7 @@ function refreshDynamicTexts() {
   updateSoundState();
   updateAboutTexts();
   updateProtocolPlaceholders();
+  renderGuide();
   setStatus(ui.statusKind || 'ready');
   if (ui.view === 'home') renderHome();
   if (ui.view === 'game') {
@@ -147,6 +150,7 @@ function applyLayout() {
   const deviceEl = $('#status-device');
   if (deviceEl) deviceEl.textContent = currentLayout() === 'portrait' ? '9:16' : '2:1';
   updateAboutTexts();
+  if (typeof applyGuideFolding === 'function') applyGuideFolding();
 }
 
 /* ============================================================
@@ -501,6 +505,289 @@ function initOnboarding() {
   buildModelDatalist();
   fillConfigFields('input-', store.getConfig());
   updatePresetActive();
+}
+
+/* ============================================================
+ * 新手教程（guide.js 渲染）
+ * ============================================================ */
+
+function guideText(value, fallbackLang) {
+  if (!value) return '';
+  return value[ui.lang] || value.zh || value.en || '';
+}
+
+function guideCorsTag(cors) {
+  if (cors === 'ok') return t('guide.corsOkTag');
+  if (cors === 'relay') return t('guide.corsRelayTag');
+  return t('guide.corsUnknownTag');
+}
+
+function guideCurrencyTag(currency) {
+  if (currency === 'cny') return t('guide.currencyCny');
+  if (currency === 'usd') return t('guide.currencyUsd');
+  return t('guide.currencyBoth');
+}
+
+function createGuideSteps() {
+  const wrap = document.createElement('div');
+  wrap.className = 'guide-steps';
+  GUIDE_STEPS.forEach((step, index) => {
+    const el = document.createElement('article');
+    el.className = 'guide-step';
+    const num = document.createElement('span');
+    num.className = 'guide-step__num';
+    num.textContent = String(index + 1).padStart(2, '0');
+    const title = document.createElement('h3');
+    title.className = 'guide-step__title';
+    title.textContent = guideText(step.title);
+    const body = document.createElement('p');
+    body.className = 'guide-step__body';
+    body.textContent = guideText(step.body);
+    el.append(num, title, body);
+    const tipText = guideText(step.tip);
+    if (tipText) {
+      const tip = document.createElement('p');
+      tip.className = 'guide-step__tip';
+      tip.textContent = tipText;
+      el.appendChild(tip);
+    }
+    wrap.appendChild(el);
+  });
+  return wrap;
+}
+
+function createGuideConcepts() {
+  const wrap = document.createElement('div');
+  wrap.className = 'guide-concepts';
+  GUIDE_CONCEPTS.forEach((concept) => {
+    const el = document.createElement('article');
+    el.className = 'guide-concept';
+    const term = document.createElement('h3');
+    term.className = 'guide-concept__term';
+    term.textContent = guideText(concept.term);
+    const desc = document.createElement('p');
+    desc.className = 'guide-concept__desc';
+    desc.textContent = guideText(concept.desc);
+    el.append(term, desc);
+    if (concept.example) {
+      const example = document.createElement('code');
+      example.className = 'guide-concept__example';
+      example.textContent = concept.example;
+      el.appendChild(example);
+    }
+    wrap.appendChild(el);
+  });
+  return wrap;
+}
+
+function createGuideProviderCard(provider) {
+  const card = document.createElement('article');
+  card.className = 'provider-card';
+  card.dataset.provider = provider.id;
+
+  const head = document.createElement('div');
+  head.className = 'provider-card__head';
+  const name = document.createElement('h3');
+  name.className = 'provider-card__name';
+  name.textContent = provider.name;
+  const tags = document.createElement('div');
+  tags.className = 'provider-card__tags';
+  if (provider.recommended) {
+    const tag = document.createElement('span');
+    tag.className = 'provider-card__tag is-recommended';
+    tag.textContent = t('guide.recommendedTag');
+    tags.appendChild(tag);
+  }
+  const corsTag = document.createElement('span');
+  corsTag.className = `provider-card__tag is-cors-${provider.cors || 'unknown'}`;
+  corsTag.textContent = guideCorsTag(provider.cors);
+  tags.appendChild(corsTag);
+  const currencyTag = document.createElement('span');
+  currencyTag.className = 'provider-card__tag is-currency';
+  currencyTag.textContent = guideCurrencyTag(provider.currency);
+  tags.appendChild(currencyTag);
+  head.append(name, tags);
+
+  const highlight = document.createElement('p');
+  highlight.className = 'provider-card__highlight';
+  highlight.textContent = guideText(provider.highlights);
+
+  const url = document.createElement('code');
+  url.className = 'provider-card__url';
+  url.textContent = provider.baseUrl;
+
+  const actions = document.createElement('div');
+  actions.className = 'provider-card__actions';
+  const keyLink = document.createElement('a');
+  keyLink.className = 'btn btn--ghost provider-card__key';
+  keyLink.href = provider.keyUrl;
+  keyLink.target = '_blank';
+  keyLink.rel = 'noopener noreferrer';
+  keyLink.textContent = t('guide.getKeyAction');
+  const docsLink = document.createElement('a');
+  docsLink.className = 'provider-card__docs';
+  docsLink.href = provider.docsUrl;
+  docsLink.target = '_blank';
+  docsLink.rel = 'noopener noreferrer';
+  docsLink.textContent = t('guide.docsAction');
+  const fillBtn = document.createElement('button');
+  fillBtn.type = 'button';
+  fillBtn.className = 'btn btn--primary provider-card__fill';
+  fillBtn.dataset.guideFill = provider.id;
+  fillBtn.textContent = t('guide.useConfigAction');
+  actions.append(keyLink, docsLink, fillBtn);
+
+  card.append(head, highlight, url);
+  const noteText = guideText(provider.note);
+  if (noteText) {
+    const note = document.createElement('p');
+    note.className = 'provider-card__note';
+    note.textContent = noteText;
+    card.appendChild(note);
+  }
+  card.appendChild(actions);
+  return card;
+}
+
+function createGuideProviders() {
+  const wrap = document.createElement('div');
+  wrap.className = 'guide-providers';
+  GUIDE_PROVIDERS.forEach((provider) => wrap.appendChild(createGuideProviderCard(provider)));
+  return wrap;
+}
+
+function createGuideFaq() {
+  const wrap = document.createElement('div');
+  wrap.className = 'guide-faq__items';
+  GUIDE_FAQ.forEach((item) => {
+    const details = document.createElement('details');
+    details.className = 'guide-faq__item';
+    const summary = document.createElement('summary');
+    summary.textContent = guideText(item.q);
+    const answer = document.createElement('p');
+    answer.textContent = guideText(item.a);
+    details.append(summary, answer);
+    wrap.appendChild(details);
+  });
+  return wrap;
+}
+
+function createGuideSection(titleKey, content, className) {
+  const section = document.createElement('section');
+  section.className = className || 'guide-block';
+  const heading = document.createElement('h3');
+  heading.className = 'guide-block__title';
+  heading.textContent = t(titleKey);
+  section.append(heading, content);
+  return section;
+}
+
+function applyGuideFolding() {
+  const portrait = document.documentElement.dataset.layout === 'portrait';
+  $$('[data-guide-fold]').forEach((section) => {
+    let toggle = Array.from(section.children).find((child) => child.classList && child.classList.contains('guide-fold__toggle'));
+    let shouldFold;
+    if (section.dataset.userFold === '0') shouldFold = false;
+    else if (section.dataset.userFold === '1') shouldFold = true;
+    else shouldFold = portrait;
+    section.classList.toggle('is-folded', shouldFold);
+    if (!portrait) {
+      if (toggle) toggle.remove();
+      delete section.dataset.userFold;
+      return;
+    }
+    if (!toggle) {
+      toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'guide-fold__toggle ghost-btn';
+      toggle.addEventListener('click', () => {
+        const nowFolded = !section.classList.contains('is-folded');
+        section.classList.toggle('is-folded', nowFolded);
+        section.dataset.userFold = nowFolded ? '1' : '0';
+        toggle.textContent = t(nowFolded ? 'guide.expand' : 'guide.collapse');
+      });
+      section.appendChild(toggle);
+    }
+    toggle.textContent = t(section.classList.contains('is-folded') ? 'guide.expand' : 'guide.collapse');
+  });
+}
+
+function renderGuide() {
+  const steps = $('#guide-steps');
+  if (steps) steps.replaceChildren(createGuideSteps());
+  const concepts = $('#guide-concepts');
+  if (concepts) concepts.replaceChildren(createGuideConcepts());
+  const providers = $('#guide-providers');
+  if (providers) providers.replaceChildren(createGuideProviders());
+  const faq = $('#guide-faq');
+  if (faq) faq.replaceChildren(createGuideFaq());
+
+  const modalBody = $('#guide-modal-body');
+  if (!modalBody) return;
+  const notes = document.createElement('div');
+  notes.className = 'guide-notes';
+  const providerNote = document.createElement('p');
+  providerNote.className = 'guide-note';
+  providerNote.textContent = t('guide.providerNote');
+  const costNote = document.createElement('p');
+  costNote.className = 'guide-note guide-note--cost';
+  costNote.textContent = t('guide.costNote');
+  const securityNote = document.createElement('p');
+  securityNote.className = 'guide-note';
+  securityNote.textContent = t('guide.securityNote');
+  notes.append(providerNote, costNote, securityNote);
+
+  const faqSection = document.createElement('section');
+  faqSection.className = 'guide-block';
+  const faqHeading = document.createElement('h3');
+  faqHeading.className = 'guide-block__title';
+  faqHeading.textContent = t('guide.faqLabel');
+  faqSection.append(faqHeading, createGuideFaq());
+
+  modalBody.replaceChildren(
+    createGuideSection('guide.stepsLabel', createGuideSteps()),
+    createGuideSection('guide.conceptsLabel', createGuideConcepts()),
+    createGuideSection('guide.providersLabel', createGuideProviders()),
+    notes,
+    faqSection
+  );
+  applyGuideFolding();
+}
+
+function applyGuideProvider(providerId) {
+  const provider = GUIDE_PROVIDERS.find((item) => item.id === providerId);
+  if (!provider) return;
+  const target = ui.guideTarget === 'settings' ? 'settings' : 'onboarding';
+  const protocolSelector = target === 'settings' ? '#settings-protocol-switch' : '#protocol-switch';
+  const prefix = target === 'settings' ? 'set-' : 'input-';
+  const statusSelector = target === 'settings' ? '#settings-api-status' : '#onboarding-status';
+  setProtocolSwitch(protocolSelector, provider.protocol === 'anthropic' ? 'anthropic' : 'openai');
+  setInputValue(`${prefix}base-url`, provider.baseUrl || '');
+  setInputValue(`${prefix}model`, provider.model || '');
+  if (target === 'onboarding') {
+    ui.presetId = provider.id;
+    updatePresetActive();
+  }
+  updateProtocolPlaceholders();
+  setFormStatus(statusSelector, 'ok', t('onboarding.filledHint'));
+  closeModal('modal-guide');
+  const form =
+    target === 'settings' ? document.querySelector('#modal-settings [data-settings-panel="api"]') : $('#onboarding-form');
+  if (form && typeof form.scrollIntoView === 'function') {
+    try {
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      /* ignore */
+    }
+  }
+  const keyInput = document.getElementById(`${prefix}api-key`);
+  if (keyInput && !keyInput.value) {
+    try {
+      keyInput.focus({ preventScroll: true });
+    } catch (err) {
+      /* ignore */
+    }
+  }
 }
 
 async function handleTestConnection(prefix, statusSelector, buttonEl) {
@@ -1488,6 +1775,49 @@ function bindEvents() {
   }
   const configureBtn = $('#btn-configure-api');
   if (configureBtn) configureBtn.addEventListener('click', () => openSettings('api'));
+  const guideBtn = $('#btn-open-guide');
+  if (guideBtn) {
+    guideBtn.addEventListener('click', () => {
+      ui.guideTarget = 'onboarding';
+      renderGuide();
+      openModal('modal-guide');
+    });
+  }
+  const guideSettingsBtn = $('#btn-open-guide-settings');
+  if (guideSettingsBtn) {
+    guideSettingsBtn.addEventListener('click', () => {
+      ui.guideTarget = 'settings';
+      renderGuide();
+      openModal('modal-guide');
+    });
+  }
+  const gotoFormBtn = $('#btn-goto-form');
+  if (gotoFormBtn) {
+    gotoFormBtn.addEventListener('click', () => {
+      const form = $('#onboarding-form');
+      if (form && typeof form.scrollIntoView === 'function') {
+        try {
+          form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (err) {
+          /* ignore */
+        }
+      }
+      const baseInput = $('#input-base-url');
+      if (baseInput) {
+        try {
+          baseInput.focus({ preventScroll: true });
+        } catch (err) {
+          /* ignore */
+        }
+      }
+    });
+  }
+  document.addEventListener('click', (event) => {
+    const fill = event.target.closest('[data-guide-fill]');
+    if (!fill) return;
+    event.preventDefault();
+    applyGuideProvider(fill.dataset.guideFill);
+  });
   const recentList = $('#recent-list');
   if (recentList) {
     recentList.addEventListener('click', (event) => {

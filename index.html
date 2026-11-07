@@ -69,14 +69,42 @@
         <!-- ============ 引导：配置 API ============ -->
         <section class="view view--onboarding" id="view-onboarding" aria-labelledby="onboarding-title">
           <div class="onboarding">
-            <div class="onboarding__intro">
-              <p class="kicker" data-i18n="onboarding.kicker">初次相遇</p>
-              <h1 class="display-title" id="onboarding-title" data-i18n="onboarding.title">接入你的说书人</h1>
-              <p class="lede" data-i18n="onboarding.desc">无尽文游没有后端。填好你自己的 AI 接口，故事就能开始。</p>
-              <p class="privacy-note" data-i18n="onboarding.privacyNote">你的密钥只保存在本机浏览器里，不会上传到任何服务器。</p>
-              <div class="intro-mark" aria-hidden="true">文</div>
+            <div class="onboarding__guide">
+              <div class="onboarding__intro">
+                <p class="kicker" data-i18n="guide.kicker">新手引导</p>
+                <h1 class="display-title" id="onboarding-title" data-i18n="guide.title">第一次用 API？照这三步来</h1>
+                <p class="lede" data-i18n="guide.desc">别担心，配置 API 就像给游戏请一位说书人：去服务商拿一把钥匙，回来填三行字，故事就开始了。</p>
+                <p class="privacy-note" data-i18n="guide.securityNote">你的 API Key 只保存在本机浏览器，只会发给你填写的服务商，不会上传到本项目的任何服务器。</p>
+                <div class="intro-mark" aria-hidden="true">文</div>
+              </div>
+              <section class="guide-block" aria-labelledby="guide-steps-title">
+                <h2 class="guide-block__title" id="guide-steps-title" data-i18n="guide.stepsLabel">三步拿到 API Key</h2>
+                <div class="guide-steps" id="guide-steps"></div>
+              </section>
+              <section class="guide-block guide-block--fold" data-guide-fold aria-labelledby="guide-concepts-title">
+                <h2 class="guide-block__title" id="guide-concepts-title" data-i18n="guide.conceptsLabel">三个名词，一次讲清</h2>
+                <div class="guide-concepts" id="guide-concepts"></div>
+              </section>
+              <section class="guide-block guide-block--fold" data-guide-fold aria-labelledby="guide-providers-title">
+                <div class="guide-block__head">
+                  <h2 class="guide-block__title" id="guide-providers-title" data-i18n="guide.providersLabel">选一家服务商</h2>
+                  <p class="guide-block__hint" data-i18n="guide.providersHint">新手优先选带「推荐」标记、且能浏览器直连的服务商；点「填入本页」会自动帮你填好地址和模型名。</p>
+                </div>
+                <div class="guide-providers" id="guide-providers"></div>
+                <p class="guide-note" data-i18n="guide.providerNote">模型名与接口地址可能随服务商更新，请以服务商文档为准。</p>
+                <p class="guide-note guide-note--cost" data-i18n="guide.costNote">本作不收费。费用由服务商按用量收取，新手玩一局通常只要几分钱到几角钱，建议先充少量试玩。</p>
+              </section>
+              <details class="guide-faq">
+                <summary data-i18n="guide.faqLabel">还有疑问？</summary>
+                <div class="guide-faq__items" id="guide-faq"></div>
+              </details>
+              <div class="guide-cta">
+                <button type="button" class="btn btn--primary" id="btn-goto-form" data-i18n="guide.gotoForm">我已拿到 Key，去填写</button>
+                <button type="button" class="btn btn--ghost" id="btn-open-guide" data-i18n="guide.moreAction">打开完整教程</button>
+              </div>
             </div>
             <form class="panel onboarding__form" id="onboarding-form" novalidate>
+              <p class="panel-hint" data-i18n="onboarding.guideHint">照着左边的三步走，五分钟就能拿到 Key。</p>
               <div class="field">
                 <span class="field__label" data-i18n="onboarding.protocolLabel">接口格式</span>
                 <div class="segmented" id="protocol-switch" role="group">
@@ -278,6 +306,9 @@
             <button type="button" class="btn btn--ghost" id="btn-test-settings" data-i18n="settings.testButton">测试连接</button>
             <button type="button" class="btn btn--primary" id="btn-save-settings-api" data-i18n="settings.saveButton">保存</button>
           </div>
+          <div class="settings-guide">
+            <button type="button" class="ghost-btn" id="btn-open-guide-settings" data-i18n="settings.guideLink">不会获取 API Key？查看配置教程</button>
+          </div>
         </section>
         <section class="tab-panel" data-settings-panel="appearance" hidden>
           <label class="field" for="select-layout">
@@ -322,6 +353,8 @@
           <div class="about-links">
             <a href="https://github.com/Nolai2010/AppealingWords" target="_blank" rel="noopener" data-i18n="settings.aboutRepo">GitHub 仓库</a>
             <a href="https://github.com/Nolai2010/AppealingWords/issues" target="_blank" rel="noopener" data-i18n="settings.aboutIssues">反馈问题</a>
+            <a href="https://github.com/Nolai2010/AppealingWords/blob/main/README.md" target="_blank" rel="noopener" data-i18n="settings.aboutReadme">阅读完整说明</a>
+            <a href="https://github.com/Nolai2010/AppealingWords/blob/main/README.en.md" target="_blank" rel="noopener">English README</a>
           </div>
           <p class="about-credits">Fusion Pixel Font（OFL-1.1）· KaTeX（MIT）· Marked（MIT）· DOMPurify（MPL-2.0 / Apache-2.0）</p>
           <p class="about-license">MIT License © 2026 Nolai2010</p>
@@ -348,6 +381,24 @@
       </div>
       <footer class="modal__foot">
         <button type="button" class="btn btn--ghost" data-close-modal="sessions" data-i18n="sessions.close">关闭</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ============ 新手教程（弹窗） ============ -->
+  <div class="modal" id="modal-guide" hidden>
+    <div class="modal__backdrop" data-close-modal="guide"></div>
+    <div class="modal__panel modal__panel--wide" role="dialog" aria-modal="true" aria-labelledby="guide-modal-title">
+      <header class="modal__head">
+        <h2 id="guide-modal-title" data-i18n="guide.modalTitle">API 配置教程</h2>
+        <button type="button" class="icon-btn modal__close" data-close-modal="guide" data-i18n-aria="a11y.closeModal">✕</button>
+      </header>
+      <div class="modal__body">
+        <p class="panel-hint" data-i18n="guide.modalIntro">第一次接触 API 也没关系。照下面的步骤，五分钟就能把游戏跑起来。</p>
+        <div id="guide-modal-body"></div>
+      </div>
+      <footer class="modal__foot">
+        <button type="button" class="btn btn--ghost" data-close-modal="guide" data-i18n="guide.modalClose">知道了</button>
       </footer>
     </div>
   </div>

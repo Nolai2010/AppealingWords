@@ -1,22 +1,32 @@
 #!/usr/bin/env node
 /**
- * dev/qa.mjs — 「无尽文游 / Appealing Words」一键端到端验收
+ * dev/qa.mjs — 「无尽文游 / Appealing Words」一键端到端验收（v1.1）
  *
- * 覆盖 dev/contracts.md §8 的全部 14 项验收，并产出 §7 要求的四张截图：
+ * v1.0 基线：dev/contracts.md §8 的 T1~T14（含四张固定截图）。
+ * v1.1 增量：dev/contracts-v1.1.md §7
+ *   T0  静态基线：guide.js 契约 / i18n PROVIDER_PRESETS（DeepSeek=deepseek-flash）/
+ *       index.html 新钩子 / README 中英互链 / store.js APP_VERSION=1.1.0（Node 阶段，无浏览器）
+ *   T1G 引导页教程区：.guide-step ≥3 / .guide-concept ≥3 / .provider-card ≥8 + 外链窗口属性
+ *       点 DeepSeek 卡「填入本页」→ baseUrl/model/协议正确；chips 里 DeepSeek 预设 = deepseek-flash；
+ *       #btn-open-guide 打开 #modal-guide 且内容非空、可关闭
+ *   T15 设置入口打开教程弹窗 + 设置→关于显示 1.1.0
+ *
+ * 截图（文件名与尺寸 v1.0 不变）：
  *   docs/screenshots/onboarding-landscape.png  1440×720
  *   docs/screenshots/home-landscape.png        1440×720
  *   docs/screenshots/game-landscape.png        1440×720
  *   docs/screenshots/game-portrait.png         390×844（iPhone UA）
  *
- * 运行：node dev/qa.mjs
- *   · 脚本内部自行启动 mock server（8787）、静态服务器（8788）、无头 Edge，结束后全部清理。
- *   · 浏览器部分需要完全权限（danger-full-access）的 shell；受限沙箱里 Edge 会 0x80000003 崩溃（契约 §1）。
+ * 运行：
+ *   node dev/qa.mjs                 完整 E2E（需要 danger-full-access 的 shell，Edge 在受限沙箱会崩溃）
+ *   node dev/qa.mjs --static-only  只跑 T0 静态检查（不需要浏览器，几分钟内可跑完）
  *   · 失败时打印 `FAIL <步骤> <原因>` 并以非 0 退出；全过打印 `ALL TESTS PASSED`。
  *
  * 专用自测脚本（非浏览器层）：
- *   node dev/selftest-mock.mjs   mock server 全行为
- *   node dev/selftest-cdp.mjs    CDP 客户端协议层（假 CDP 服务器）
- *   node dev/selftest-serve.mjs  静态服务器
+ *   node dev/selftest-mock.mjs     mock server 全行为
+ *   node dev/selftest-cdp.mjs      CDP 客户端协议层（假 CDP 服务器）
+ *   node dev/selftest-serve.mjs    静态服务器
+ *   node dev/selftest-static.mjs   v1.1 静态检查（夹具目录，含正向与 5 个破坏场景）
  */
 
 import fsp from 'node:fs/promises';
@@ -31,6 +41,7 @@ import {
 } from './mock-api-server.mjs';
 import { startStaticServer, REPO_ROOT } from './serve.mjs';
 import { launchEdge, sleep } from './cdp.mjs';
+import { runStaticChecks } from './static-checks.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,6 +50,7 @@ const APP_URL = 'http://127.0.0.1:8788/';
 const MOCK_BASE = `http://127.0.0.1:${MOCK_PORT}`;
 const SCREENSHOTS_DIR = path.join(REPO_ROOT, 'docs', 'screenshots');
 const STORE_KEY = 'appealingwords.v1';
+const STATIC_ONLY = process.argv.includes('--static-only');
 
 const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0';
@@ -83,6 +95,7 @@ function firstLine(err) {
 
 let I18N = null;
 let PROMPT = null;
+let GUIDE = null;
 
 async function loadOptionalModules() {
   try {
@@ -94,6 +107,11 @@ async function loadOptionalModules() {
     PROMPT = await import(pathToFileURL(path.join(REPO_ROOT, 'assets', 'js', 'prompt.js')).href);
   } catch (err) {
     console.log(`[qa][warn] 无法导入 assets/js/prompt.js（${firstLine(err)}），prompt 断言使用文本匹配`);
+  }
+  try {
+    GUIDE = await import(pathToFileURL(path.join(REPO_ROOT, 'assets', 'js', 'guide.js')).href);
+  } catch (err) {
+    console.log(`[qa][warn] 无法导入 assets/js/guide.js（${firstLine(err)}），教程断言使用 DOM 文本回退`);
   }
 }
 
@@ -381,6 +399,64 @@ async function waitChoices(p, timeout = 25000) {
 }
 
 // ---------------------------------------------------------------------------
+// v1.1 新手教程辅助
+// ---------------------------------------------------------------------------
+
+/** 「填入本页」按钮的候选文案（i18n 优先，回退中文/英文关键词）。 */
+function useConfigActionTexts() {
+  return [
+    t('zh', 'guide.useConfigAction'),
+    t('en', 'guide.useConfigAction'),
+    '填入本页',
+    '填入',
+    'Use this config',
+    'Use config',
+    'Use',
+  ].filter(Boolean);
+}
+
+/** 打开教程弹窗 → 断言内容非空 → 关闭。openerSelector 可为 #btn-open-guide / #btn-open-guide-settings。 */
+async function assertGuideModalOpens(p, openerSelector) {
+  assert(await p.exists(openerSelector), `缺少教程入口 ${openerSelector}`);
+  const clicked = await p.click(openerSelector);
+  assert(clicked, `点击教程入口 ${openerSelector} 失败`);
+
+  await p.wait(
+    '!!document.querySelector("#modal-guide") && __vis(document.querySelector("#modal-guide"))',
+    `教程弹窗 #modal-guide 由 ${openerSelector} 打开`,
+    12000,
+  );
+  const modalInfo = await p.run(`
+    const modal = document.querySelector('#modal-guide');
+    const body = document.querySelector('#guide-modal-body');
+    return {
+      modalText: __norm(modal ? modal.innerText || modal.textContent : ''),
+      bodyText: __norm(body ? body.innerText || body.textContent : ''),
+      bodyChildren: body ? body.children.length : 0,
+      hasClose: Boolean(modal && modal.querySelector('[data-close-modal], [data-action="close"], .modal__close, button')),
+    };
+  `);
+  assert(modalInfo.modalText.length > 60, `教程弹窗内容为空或过短（modalText=${modalInfo.modalText.length}）：${JSON.stringify(modalInfo).slice(0, 300)}`);
+  assert(modalInfo.bodyText.length > 40, `#guide-modal-body 内容为空或过短（bodyText=${modalInfo.bodyText.length}）`);
+  assert(modalInfo.bodyChildren >= 1, '#guide-modal-body 没有任何子节点（教程内容未渲染）');
+
+  // 关闭：优先 [data-close-modal]，其次 [data-action="close"] / .modal__close
+  const closeResult = await p.run(`
+    const modal = document.querySelector('#modal-guide');
+    if (!modal) return { ok: false, reason: '弹窗已不存在' };
+    const closeBtn = modal.querySelector('[data-close-modal]')
+      || modal.querySelector('[data-action="close"]')
+      || modal.querySelector('.modal__close');
+    if (!closeBtn) return { ok: false, reason: '找不到关闭按钮' };
+    __click(closeBtn);
+    return { ok: true };
+  `);
+  assert(closeResult.ok, `教程弹窗无法关闭：${JSON.stringify(closeResult)}`);
+  await p.wait('!__vis(document.querySelector("#modal-guide"))', '教程弹窗关闭', 8000);
+  return modalInfo;
+}
+
+// ---------------------------------------------------------------------------
 // 截图
 // ---------------------------------------------------------------------------
 
@@ -657,6 +733,23 @@ async function main() {
   I18N_LOADED = Boolean(I18N);
   console.log(`[qa] i18n.js：${I18N ? '已加载（精确文案断言）' : '未就绪（宽松断言）'}`);
   console.log(`[qa] prompt.js：${PROMPT ? '已加载' : '未就绪'}`);
+  console.log(`[qa] guide.js：${GUIDE ? '已加载（教程数据）' : '未就绪（DOM 文本回退）'}`);
+
+  // =========================================================================
+  // T0 v1.1 静态基线（Node 阶段，不需要浏览器）
+  // =========================================================================
+  await step('T0 §7 静态基线：guide.js 契约 / PROVIDER_PRESETS(DeepSeek=deepseek-flash) / index 钩子 / README 中英互链 / APP_VERSION=1.1.0', async () => {
+    const result = await runStaticChecks({ root: REPO_ROOT });
+    const failed = result.checks.filter((check) => !check.ok);
+    console.log(`[qa] 静态检查 ${result.checks.length} 项：PASS ${result.checks.length - failed.length}，FAIL ${failed.length}`);
+    for (const failure of result.failures) console.log(`[static] FAIL ${failure}`);
+    if (!result.ok) throw new Error(`静态检查 ${failed.length} 项失败（详见上方 [static] FAIL 行）`);
+  });
+
+  if (STATIC_ONLY) {
+    console.log('\nSTATIC CHECKS PASSED（--static-only，未启动浏览器）');
+    return;
+  }
 
   console.log('[qa] 启动 mock API server（127.0.0.1:8787）…');
   mock = await startMockServer();
@@ -807,6 +900,89 @@ async function main() {
 
     // headless 的默认 navigator 语言可能不同，先把界面固定为中文，保证后续 mock 返回中文、截图也是中文界面
     await ensureLang(P, 'zh');
+  });
+
+  // =========================================================================
+  // v1.1 §7 T-新1/2/3/4：新手教程区 + 填入本页 + DeepSeek 预置 + 教程弹窗
+  // =========================================================================
+  await step('T1G §7 新手教程区：guide-step≥3 / guide-concept≥3 / provider-card≥8+外链 / 填入本页 / DeepSeek 预置 / 教程弹窗', async () => {
+    // --- T-新1：教程区结构与数量 ---
+    await P.wait('document.querySelectorAll("#guide-steps .guide-step").length >= 3', '教程三步渲染（#guide-steps .guide-step）', 15000);
+    await P.wait('document.querySelectorAll("#guide-concepts .guide-concept").length >= 3', '概念区渲染（#guide-concepts .guide-concept）', 15000);
+    await P.wait('document.querySelectorAll("#guide-providers .provider-card").length >= 8', '服务商卡渲染（#guide-providers .provider-card >=8）', 15000);
+
+    const stepCount = await P.count('#guide-steps .guide-step');
+    const conceptCount = await P.count('#guide-concepts .guide-concept');
+    const cardCount = await P.count('#guide-providers .provider-card');
+    assert(stepCount >= 3, `教程步骤应 ≥3，实际 ${stepCount}`);
+    assert(conceptCount >= 3, `教程概念应 ≥3，实际 ${conceptCount}`);
+    assert(cardCount >= 8, `服务商卡应 ≥8，实际 ${cardCount}`);
+    if (Array.isArray(GUIDE?.GUIDE_PROVIDERS)) eq(cardCount, GUIDE.GUIDE_PROVIDERS.length, '服务商卡数量应等于 guide.js GUIDE_PROVIDERS');
+    if (Array.isArray(GUIDE?.GUIDE_STEPS)) eq(stepCount, GUIDE.GUIDE_STEPS.length, '教程步骤数应等于 guide.js GUIDE_STEPS');
+    if (Array.isArray(GUIDE?.GUIDE_CONCEPTS)) eq(conceptCount, GUIDE.GUIDE_CONCEPTS.length, '教程概念数应等于 guide.js GUIDE_CONCEPTS');
+
+    // 每张卡都有 https 外链，且 target=_blank、rel 含 noopener
+    const cardLinks = await P.run(`
+      const cards = [...document.querySelectorAll('#guide-providers .provider-card')];
+      return cards.map((card) => ({
+        name: __norm(card.textContent).slice(0, 40),
+        links: [...card.querySelectorAll('a[href]')].map((a) => ({
+          href: a.getAttribute('href') || '',
+          target: a.getAttribute('target') || '',
+          rel: a.getAttribute('rel') || '',
+        })),
+      }));
+    `);
+    const noExternal = cardLinks.filter((card) => !card.links.some((link) => /^https:\/\//i.test(link.href)));
+    assert(noExternal.length === 0, `以下服务商卡缺少 https 外链：${JSON.stringify(noExternal.map((card) => card.name))}`);
+    const badLinkAttrs = cardLinks.flatMap((card) =>
+      card.links
+        .filter((link) => /^https:\/\//i.test(link.href))
+        .filter((link) => link.target !== '_blank' || !/noopener/i.test(link.rel))
+        .map((link) => ({ card: card.name, href: link.href, target: link.target, rel: link.rel })),
+    );
+    assert(badLinkAttrs.length === 0, `以下外链缺少 target=_blank / rel 含 noopener：${JSON.stringify(badLinkAttrs.slice(0, 6))}`);
+
+    // --- T-新3：chips 里 DeepSeek 预设 = deepseek-flash ---
+    const chipSelector = '#preset-chips [data-preset="deepseek"]';
+    assert(await P.exists(chipSelector), '缺少 DeepSeek 预设 chip（#preset-chips [data-preset="deepseek"]）');
+    await P.click(chipSelector);
+    await sleep(100);
+    eq(await P.run('return document.getElementById("input-base-url").value;'), 'https://api.deepseek.com', 'DeepSeek 预设 baseUrl 应为 https://api.deepseek.com');
+    eq(await P.run('return document.getElementById("input-model").value;'), 'deepseek-flash', 'DeepSeek 预设 model 应为 deepseek-flash');
+    eq(
+      await P.run(`const el = document.querySelector('#protocol-switch [data-protocol].is-active'); return el ? el.dataset.protocol : null;`),
+      'openai',
+      'DeepSeek 预设协议应为 openai',
+    );
+
+    // --- T-新2：点 DeepSeek 卡「填入本页」---
+    const useTexts = useConfigActionTexts();
+    const fillResult = await P.run(`
+      const cards = [...document.querySelectorAll('#guide-providers .provider-card')];
+      const card = cards.find((el) => /deepseek/i.test(el.textContent || ''));
+      if (!card) return { ok: false, reason: '未找到 DeepSeek 服务商卡' };
+      const texts = ${JSON.stringify(useTexts)};
+      const nodes = [...card.querySelectorAll('button, [role="button"], a, [data-action]')];
+      const btn = nodes.find((el) => texts.some((text) => (el.textContent || '').includes(text)))
+        || nodes.find((el) => /填入|填充|use/i.test(el.textContent || ''));
+      if (!btn) return { ok: false, reason: '卡片内找不到「填入本页」按钮', candidates: nodes.map((el) => (el.textContent || '').trim().slice(0, 24)) };
+      __click(btn);
+      return { ok: true, text: (btn.textContent || '').trim() };
+    `);
+    assert(fillResult.ok, `DeepSeek 卡「填入本页」不可用：${JSON.stringify(fillResult)}`);
+    await sleep(150);
+    eq(await P.run('return document.getElementById("input-base-url").value;'), 'https://api.deepseek.com', '「填入本页」后 baseUrl 应为 https://api.deepseek.com');
+    eq(await P.run('return document.getElementById("input-model").value;'), 'deepseek-flash', '「填入本页」后 model 应为 deepseek-flash');
+    eq(
+      await P.run(`const el = document.querySelector('#protocol-switch [data-protocol].is-active'); return el ? el.dataset.protocol : null;`),
+      'openai',
+      '「填入本页」后协议应为 openai',
+    );
+
+    // --- T-新4（入口一）：#btn-open-guide 打开教程弹窗 ---
+    await assertGuideModalOpens(P, '#btn-open-guide');
+    await waitView(P, 'onboarding');
 
     await screenshot(P, 'onboarding-landscape.png', { width: 1440, height: 720 });
   });
@@ -1534,14 +1710,66 @@ async function main() {
       console.log(`[qa] ${name}: ${size.width}×${size.height}, ${buffer.length}B`);
     }
   });
+
+  // =========================================================================
+  // v1.1 §7 T-新4（入口二）+ T-新5：设置里的教程入口 + 关于版本 1.1.0
+  // =========================================================================
+  await step('T15 §7 教程弹窗（设置入口 #btn-open-guide-settings）+ 设置→关于显示 1.1.0', async () => {
+    await setDesktop(P);
+    await writeStore(P, makeStore({ settings: makeSettings() }));
+    await reloadApp(P);
+    await waitView(P, 'home');
+
+    const opened = await P.click('#btn-settings');
+    assert(opened, '点击 #btn-settings 失败');
+    await P.wait('!!document.querySelector("#modal-settings") && __vis(document.querySelector("#modal-settings"))', '设置弹窗可见', 10000);
+
+    // 设置 → 接口 tab 的教程入口 #btn-open-guide-settings
+    await P.click('[data-settings-tab="api"]').catch(() => false);
+    await sleep(100);
+    await assertGuideModalOpens(P, '#btn-open-guide-settings');
+
+    // 教程弹窗关闭后设置弹窗应仍在；若被一并关闭则重新打开
+    if (!(await P.visible('#modal-settings'))) {
+      await P.click('#btn-settings');
+      await P.wait('!!document.querySelector("#modal-settings") && __vis(document.querySelector("#modal-settings"))', '设置弹窗重新可见', 10000);
+    }
+
+    // 设置 → 关于：版本 1.1.0
+    const aboutClicked = await P.click('[data-settings-tab="about"]');
+    assert(aboutClicked, '点击设置「关于」tab 失败');
+    await sleep(150);
+    const aboutInfo = await P.run(`
+      const modal = document.querySelector('#modal-settings');
+      const panel = document.querySelector('[data-settings-panel="about"]');
+      const versionEl = document.querySelector('#about-version');
+      return {
+        modalText: __norm(modal ? modal.innerText || modal.textContent : ''),
+        panelText: __norm(panel ? (panel.innerText || panel.textContent) : ''),
+        versionText: __norm(versionEl ? versionEl.innerText || versionEl.textContent : ''),
+      };
+    `);
+    assert(
+      /1\.1\.0/.test(aboutInfo.modalText) || /1\.1\.0/.test(aboutInfo.panelText),
+      `设置→关于未显示版本 1.1.0（panelText=${JSON.stringify(aboutInfo.panelText.slice(0, 300))}）`,
+    );
+    if (aboutInfo.versionText) {
+      includes(aboutInfo.versionText, '1.1.0', '#about-version 未显示 1.1.0');
+    }
+    console.log(`[qa] 设置→关于版本文案：${JSON.stringify(aboutInfo.versionText || aboutInfo.panelText.slice(0, 120))}`);
+  });
 }
 
 let exitCode = 0;
 
 try {
   await main();
-  console.log('\nALL TESTS PASSED');
-  console.log(`[qa] ${passedSteps} 个步骤全部通过，截图目录：${path.relative(REPO_ROOT, SCREENSHOTS_DIR)}`);
+  console.log(STATIC_ONLY ? '\nSTATIC CHECKS PASSED' : '\nALL TESTS PASSED');
+  console.log(
+    STATIC_ONLY
+      ? `[qa] ${passedSteps} 个静态步骤通过（--static-only）`
+      : `[qa] ${passedSteps} 个步骤全部通过，截图目录：${path.relative(REPO_ROOT, SCREENSHOTS_DIR)}`,
+  );
 } catch (err) {
   exitCode = 1;
   console.log(`\nFAIL ${currentStep} ${err?.message || err}`);
@@ -1552,11 +1780,3 @@ try {
 }
 
 process.exit(exitCode);
-
-// ---------------------------------------------------------------------------
-// 小工具：从 i18n key 清单里挑几个“大概率可见”的 key 做精确文案断言
-// ---------------------------------------------------------------------------
-function listOfKnownKeys() {
-  const candidates = ['game.choicesTitle', 'game.freePlaceholder', 'game.freeSend', 'home.newSessionButton', 'common.send'];
-  return candidates.filter((key) => typeof I18N?.STRINGS?.en?.[key] === 'string');
-}
