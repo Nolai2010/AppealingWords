@@ -75,13 +75,13 @@ async function buildFixture() {
   await fsp.mkdir(assets, { recursive: true });
   await fsp.mkdir(path.join(TMP, 'docs', 'screenshots'), { recursive: true });
 
-  // store.js（v1.1.1）
-  await fsp.writeFile(path.join(assets, 'store.js'), "export const APP_VERSION = '1.1.1';\n");
+  // store.js（v1.1.2）
+  await fsp.writeFile(path.join(assets, 'store.js'), "export const APP_VERSION = '1.1.2';\n");
 
-  // v1.1.1 hotfix 文件
+  // v1.1.1 hotfix 文件 + v1.1.2 面积算法
   await fsp.writeFile(
     path.join(assets, 'layout-boot.js'),
-    `(function () {\n  var root = document.documentElement;\n  var STORAGE_KEY = 'appealingwords.v1';\n  function readSettings() { try { return (JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}).settings || {}; } catch (err) { return {}; } }\n  function hasTouch() { return (navigator.maxTouchPoints || 0) > 0; }\n  function isCoarse() { try { return window.matchMedia('(pointer: coarse)').matches; } catch (err) { return false; } }\n  function detect() { var ua = navigator.userAgent || ''; var mobileUa = /Android|iPhone|Mobile/i.test(ua); var narrow = window.innerWidth > 0 && window.innerWidth <= 820; return mobileUa || ((hasTouch() || isCoarse()) && narrow) ? 'mobile' : 'desktop'; }\n  function apply() { var settings = readSettings(); var device = detect(); var layout = settings.layout === 'portrait' || settings.layout === 'landscape' ? settings.layout : device === 'mobile' ? (window.innerHeight >= window.innerWidth ? 'portrait' : 'landscape') : 'landscape'; root.setAttribute('data-device', device); root.setAttribute('data-layout', layout); window.__APPEALING_ENV__ = { device: device, layout: layout, boot: true }; }\n  apply();\n  window.addEventListener('resize', apply);\n})();\n`,
+    `(function () {\n  var root = document.documentElement;\n  var STORAGE_KEY = 'appealingwords.v1';\n  function readSettings() { try { return (JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}).settings || {}; } catch (err) { return {}; } }\n  function hasTouch() { return (navigator.maxTouchPoints || 0) > 0; }\n  function isCoarse() { try { return window.matchMedia('(pointer: coarse)').matches; } catch (err) { return false; } }\n  function detect() { var ua = navigator.userAgent || ''; var mobileUa = /Android|iPhone|Mobile/i.test(ua); var narrow = window.innerWidth > 0 && window.innerWidth <= 820; return mobileUa || ((hasTouch() || isCoarse()) && narrow) ? 'mobile' : 'desktop'; }\n  function stageArea(ratio) { var maxW = (window.innerWidth || 0) * 0.96; var maxH = (window.innerHeight || 0) * 0.94; if (maxW <= 0 || maxH <= 0) return 0; var width = Math.min(maxW, maxH * ratio); return width * (width / ratio); }\n  function computeLayout(device, settings) { if (settings.layout === 'portrait' || settings.layout === 'landscape') return settings.layout; var portraitArea = stageArea(9 / 16); var landscapeArea = stageArea(2); return portraitArea * 1.08 >= landscapeArea ? 'portrait' : 'landscape'; }\n  function apply() { var settings = readSettings(); var device = detect(); var layout = computeLayout(device, settings); root.setAttribute('data-device', device); root.setAttribute('data-layout', layout); window.__APPEALING_ENV__ = { device: device, layout: layout, boot: true }; }\n  apply();\n  window.addEventListener('resize', apply);\n})();\n`,
   );
   await fsp.writeFile(
     path.join(assets, 'legacy-notice.js'),
@@ -163,6 +163,8 @@ async function buildFixture() {
       `  const guideSteps = GUIDE_STEPS;\n` +
       `  const hasTouch = (navigator.maxTouchPoints || 0) > 0;\n` +
       `  const coarse = window.matchMedia('(pointer: coarse)').matches;\n` +
+      `  const stageArea = (ratio) => { const maxW = (window.innerWidth || 0) * 0.96; const maxH = (window.innerHeight || 0) * 0.94; if (maxW <= 0 || maxH <= 0) return 0; const width = Math.min(maxW, maxH * ratio); return width * (width / ratio); };\n` +
+      `  const layout = stageArea(9 / 16) * 1.08 >= stageArea(2) ? 'portrait' : 'landscape';\n` +
       `  window.__APPEALING_APP_READY__ = true;\n` +
       `  window.addEventListener('orientationchange', function () { return [hasTouch, coarse]; });\n` +
       `  document.querySelector('#btn-open-guide')?.addEventListener('click', () => { document.querySelector('#modal-guide').hidden = false; });\n` +
@@ -252,13 +254,13 @@ try {
     await buildFixture();
   }
 
-  // ---- 场景 6：APP_VERSION 未升到 1.1.1 ----
+  // ---- 场景 6：APP_VERSION 未升到 1.1.2 ----
   {
     const storePath = path.join(TMP, 'assets', 'js', 'store.js');
-    await fsp.writeFile(storePath, "export const APP_VERSION = '1.1.0';\n");
+    await fsp.writeFile(storePath, "export const APP_VERSION = '1.1.1';\n");
     const result = await runStaticChecks({ root: TMP });
     ok(!result.ok, '破坏 APP_VERSION：静态检查应失败');
-    contains(result.failures.join('\n'), "APP_VERSION = '1.1.1'", '破坏 APP_VERSION：定位到具体项');
+    contains(result.failures.join('\n'), "APP_VERSION = '1.1.2'", '破坏 APP_VERSION：定位到具体项');
     await buildFixture();
   }
 
@@ -271,7 +273,18 @@ try {
     await buildFixture();
   }
 
-  // ---- 场景 8：恢复后再次全通过（确认夹具状态可重复）----
+  // ---- 场景 8：layout-boot.js 缺少 1.08 竖屏偏置（v1.1.2 面积算法）----
+  {
+    const layoutBootPath = path.join(TMP, 'assets', 'js', 'layout-boot.js');
+    const source = await fsp.readFile(layoutBootPath, 'utf8');
+    await fsp.writeFile(layoutBootPath, source.replace('portraitArea * 1.08', 'portraitArea * 1.0'));
+    const result = await runStaticChecks({ root: TMP });
+    ok(!result.ok, '缺少 1.08 偏置：静态检查应失败');
+    contains(result.failures.join('\n'), 'layout-boot.js 使用「9:16 vs 2:1 可用面积 + 1.08 竖屏偏置」', '缺少 1.08 偏置：定位到具体项');
+    await buildFixture();
+  }
+
+  // ---- 场景 9：恢复后再次全通过（确认夹具状态可重复）----
   {
     const result = await runStaticChecks({ root: TMP });
     ok(result.ok, '恢复夹具：静态检查再次全部 PASS', JSON.stringify(result.failures.slice(0, 8)));

@@ -42,16 +42,28 @@
     return mobileUa || ipadOs || (touchOrCoarse && narrow) ? 'mobile' : 'desktop';
   }
 
+  function stageArea(ratio) {
+    var maxW = (window.innerWidth || 0) * 0.96;
+    var maxH = (window.innerHeight || 0) * 0.94;
+    if (maxW <= 0 || maxH <= 0) return 0;
+    var width = Math.min(maxW, maxH * ratio);
+    var height = width / ratio;
+    return width * height;
+  }
+
   function computeLayout(device, settings) {
     if (settings.layout === 'landscape' || settings.layout === 'portrait') {
       return settings.layout;
     }
-    if (device === 'mobile') {
-      return window.innerHeight >= window.innerWidth ? 'portrait' : 'landscape';
+    // 不按「设备类型」硬分横竖，而是比较 9:16 与 2:1 两种舞台在当前视口里
+    // 哪种可用面积更大：折叠屏、平板、窄桌面窗口等中间形态自动选择更舒适的一种。
+    // 1.08 的偏置让接近正方形的视口优先选择竖屏，阅读更从容。
+    var portraitArea = stageArea(9 / 16);
+    var landscapeArea = stageArea(2);
+    if (!portraitArea && !landscapeArea) {
+      return device === 'mobile' ? 'portrait' : 'landscape';
     }
-    var vw = window.innerWidth || 0;
-    if (vw > 0 && vw < 520 && window.innerHeight > window.innerWidth) return 'portrait';
-    return 'landscape';
+    return portraitArea * 1.08 >= landscapeArea ? 'portrait' : 'landscape';
   }
 
   function apply() {

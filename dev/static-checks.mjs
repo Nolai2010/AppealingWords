@@ -7,9 +7,10 @@
  *   §4   i18n.js 新 key 成对 + 占位符一致 + PROVIDER_PRESETS 顺序与取值
  *   §5   README.md / README.en.md 存在、顶部互链、引用 4 张既有截图
  *   §6   index.html 新钩子（#guide-steps/#guide-concepts/#guide-providers/#guide-faq/#modal-guide 等）
- *   §8   store.js APP_VERSION = '1.1.1'
+ *   §8   store.js APP_VERSION = '1.1.2'
  *   v1.1.1 hotfix：layout-boot.js / legacy-notice.js 存在且 index.html 中 layout-boot 早于 CSS、legacy-notice 为 nomodule；
  *          app.js 含触屏/coarse + 窄视口识别与 resize 接管
+ *   v1.1.2 布局策略：layout-boot.js 与 app.js 都使用「9:16 vs 2:1 可用面积比较 + 1.08 竖屏偏置」算法
  *
  * 用法：
  *   import { runStaticChecks } from './static-checks.mjs';
@@ -205,13 +206,13 @@ export async function runStaticChecks({ root = REPO_ROOT } = {}) {
     add(`文件存在：${rel(filePath)}`, existence[key], `${rel(filePath)} 不存在`);
   }
 
-  // ---- 1. store.js APP_VERSION = 1.1.1（契约 §8 / v1.1.1 hotfix）----
+  // ---- 1. store.js APP_VERSION = 1.1.2（契约 §8 / v1.1.2）----
   if (existence.store) {
     const source = (await readTextSafe(files.store)) || '';
     const match = /APP_VERSION\s*=\s*['"]([^'"]+)['"]/.exec(source);
     add(
-      "store.js APP_VERSION = '1.1.1'（契约 §8）",
-      match?.[1] === '1.1.1',
+      "store.js APP_VERSION = '1.1.2'（契约 §8）",
+      match?.[1] === '1.1.2',
       match ? `实际为 ${JSON.stringify(match[1])}` : '未找到 APP_VERSION 常量',
     );
   }
@@ -231,6 +232,14 @@ export async function runStaticChecks({ root = REPO_ROOT } = {}) {
     add(
       'layout-boot.js 含触屏/coarse + 窄视口(≤820)兜底判端逻辑',
       /maxTouchPoints/.test(source) && /pointer:\s*coarse/.test(source) && /820/.test(source),
+    );
+    add(
+      'layout-boot.js 使用「9:16 vs 2:1 可用面积 + 1.08 竖屏偏置」布局算法（v1.1.2）',
+      /9\s*\/\s*16/.test(source) &&
+        /(stageArea|area|Area|面积)/.test(source) &&
+        /1\.08/.test(source) &&
+        /1\.08\s*\*|\*\s*1\.08/.test(source),
+      '未找到 9:16 / 2:1 面积比较或 1.08 偏置关键词',
     );
   }
 
@@ -470,6 +479,14 @@ export async function runStaticChecks({ root = REPO_ROOT } = {}) {
         /__APPEALING_APP_READY__/.test(appSource) &&
         /orientationchange/.test(appSource),
       '未在 app.js 中找到触屏/窄视口/resize 接管逻辑',
+    );
+    add(
+      'app.js 与 layout-boot 一致使用「9:16 vs 2:1 可用面积 + 1.08 竖屏偏置」算法（v1.1.2）',
+      /9\s*\/\s*16/.test(appSource) &&
+        /(stageArea|availableArea|usableArea|面积)/.test(appSource) &&
+        /1\.08/.test(appSource) &&
+        /1\.08\s*\*|\*\s*1\.08/.test(appSource),
+      '未在 app.js 中找到 9:16 / 2:1 面积比较或 1.08 偏置关键词',
     );
   }
 

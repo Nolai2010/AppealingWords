@@ -156,16 +156,23 @@ function detectDevice() {
       : 'desktop';
 }
 
+function stageArea(ratio) {
+  const maxWidth = (window.innerWidth || 0) * 0.96;
+  const maxHeight = (window.innerHeight || 0) * 0.94;
+  if (maxWidth <= 0 || maxHeight <= 0) return 0;
+  const width = Math.min(maxWidth, maxHeight * ratio);
+  return width * (width / ratio);
+}
+
 function currentLayout() {
   const settings = store.getSettings();
   if (settings.layout === 'landscape' || settings.layout === 'portrait') return settings.layout;
-  if (ui.device === 'mobile') {
-    // 竖握手机 → 9:16；横握手机 → 2:1，避免竖屏舞台在横屏里缩放得很小
-    return window.innerHeight >= window.innerWidth ? 'portrait' : 'landscape';
-  }
-  // 桌面端：窗口很窄且竖长时也照顾可读性
-  if (window.innerWidth < 520 && window.innerHeight > window.innerWidth) return 'portrait';
-  return 'landscape';
+  // 折叠屏 / 平板 / 窄桌面窗口：比较 9:16 与 2:1 舞台在当前视口里的可用面积，
+  // 选更大的一种；接近正方形的视口优先竖屏（1.08 偏置），阅读更从容。
+  const portraitArea = stageArea(9 / 16);
+  const landscapeArea = stageArea(2);
+  if (!portraitArea && !landscapeArea) return ui.device === 'mobile' ? 'portrait' : 'landscape';
+  return portraitArea * 1.08 >= landscapeArea ? 'portrait' : 'landscape';
 }
 
 function applyLayout() {
