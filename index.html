@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh" data-device="desktop" data-layout="landscape">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#040807">
+  <title>无尽文游 · Appealing Words</title>
+  <meta name="description" content="没有尽头的互动文字游戏。自带 AI 接口的纯前端文字冒险，支持规则怪谈、警匪智斗、宫闱疑云、江湖夜雨。">
+  <meta property="og:title" content="无尽文游 · Appealing Words">
+  <meta property="og:description" content="没有尽头的互动文字游戏。自带 AI 接口的纯前端文字冒险。">
+  <meta property="og:type" content="website">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src https: http:; base-uri 'none'; form-action 'none'">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="preload" as="font" type="font/woff2" href="assets/fonts/fusion-pixel-12-zh_hans.woff2" crossorigin>
+  <link rel="preload" as="font" type="font/woff2" href="assets/fonts/fusion-pixel-12-latin.woff2" crossorigin>
+  <link rel="stylesheet" href="assets/vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script defer src="assets/vendor/katex/katex.min.js"></script>
+  <script defer src="assets/vendor/katex/contrib/auto-render.min.js"></script>
+  <script defer src="assets/vendor/dompurify/purify.min.js"></script>
+  <script type="module" src="assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="a11y.skipToContent">跳到正文</a>
+
+  <div class="stage">
+    <div class="app-frame" id="app">
+      <span class="frame__corner frame__corner--tl" aria-hidden="true"></span>
+      <span class="frame__corner frame__corner--tr" aria-hidden="true"></span>
+      <span class="frame__corner frame__corner--bl" aria-hidden="true"></span>
+      <span class="frame__corner frame__corner--br" aria-hidden="true"></span>
+
+      <header class="topbar" id="topbar">
+        <div class="topbar__brand">
+          <button type="button" class="icon-btn topbar__home" id="btn-home" data-i18n-aria="a11y.home" title="主页">
+            <svg class="icon" viewBox="0 0 16 16" width="16" height="16" shape-rendering="crispEdges" aria-hidden="true">
+              <path d="M8 1 1 8h2v7h4v-4h2v4h4V8h2L8 1z" fill="currentColor"/>
+            </svg>
+            <span class="icon-btn__label" data-i18n="nav.home">主页</span>
+          </button>
+          <div class="brand">
+            <span class="brand__title" data-i18n="brand.name">无尽文游</span>
+            <span class="brand__sub" data-i18n="brand.nameEn">APPEALING WORDS</span>
+          </div>
+        </div>
+        <div class="topbar__actions">
+          <button type="button" class="icon-btn" id="btn-sessions" data-i18n-aria="a11y.sessions" title="档案">
+            <svg class="icon" viewBox="0 0 16 16" width="16" height="16" shape-rendering="crispEdges" aria-hidden="true">
+              <path d="M2 1h10v2h2v12H4v-2H2V1zm3 3v9h7V4H5zm2 1h3v1H7V5zm0 2h3v1H7V7zm0 2h2v1H7V9z" fill="currentColor"/>
+            </svg>
+            <span class="icon-btn__label" data-i18n="nav.sessions">档案</span>
+          </button>
+          <button type="button" class="icon-btn" id="btn-settings" data-i18n-aria="a11y.settings" title="设置">
+            <svg class="icon" viewBox="0 0 16 16" width="16" height="16" shape-rendering="crispEdges" aria-hidden="true">
+              <path d="M7 1h2v2h2l1-1 1 1-1 1v2h2v2h-2v2l1 1-1 1-1-1H9v2H7v-2H5l-1 1-1-1 1-1V7H2V5h2V3L3 2l1-1 1 1h2V1zm1 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="currentColor" fill-rule="evenodd"/>
+            </svg>
+            <span class="icon-btn__label" data-i18n="nav.settings">设置</span>
+          </button>
+          <div class="lang-switch" id="lang-switch" role="group" data-i18n-aria="a11y.langSwitch" aria-label="切换语言">
+            <button type="button" class="lang-switch__btn is-active" data-lang="zh" lang="zh-CN">中</button>
+            <button type="button" class="lang-switch__btn" data-lang="en" lang="en">EN</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="main" id="main">
+        <!-- ============ 引导：配置 API ============ -->
+        <section class="view view--onboarding" id="view-onboarding" aria-labelledby="onboarding-title">
+          <div class="onboarding">
+            <div class="onboarding__intro">
+              <p class="kicker" data-i18n="onboarding.kicker">初次相遇</p>
+              <h1 class="display-title" id="onboarding-title" data-i18n="onboarding.title">接入你的说书人</h1>
+              <p class="lede" data-i18n="onboarding.desc">无尽文游没有后端。填好你自己的 AI 接口，故事就能开始。</p>
+              <p class="privacy-note" data-i18n="onboarding.privacyNote">你的密钥只保存在本机浏览器里，不会上传到任何服务器。</p>
+              <div class="intro-mark" aria-hidden="true">文</div>
+            </div>
+            <form class="panel onboarding__form" id="onboarding-form" novalidate>
+              <div class="field">
+                <span class="field__label" data-i18n="onboarding.protocolLabel">接口格式</span>
+                <div class="segmented" id="protocol-switch" role="group">
+                  <button type="button" class="segmented__btn is-active" data-protocol="openai" data-i18n="onboarding.protocolOpenai">OpenAI 兼容</button>
+                  <button type="button" class="segmented__btn" data-protocol="anthropic" data-i18n="onboarding.protocolAnthropic">Anthropic 格式</button>
+                </div>
+              </div>
+              <div class="field">
+                <span class="field__label" data-i18n="onboarding.presetsLabel">常见服务商</span>
+                <div class="chips" id="preset-chips"></div>
+                <p class="field__hint" data-i18n="onboarding.providerNote">示例配置仅供参考，模型名请以服务商文档为准。</p>
+              </div>
+              <label class="field" for="input-base-url">
+                <span class="field__label" data-i18n="onboarding.baseUrlLabel">Base URL</span>
+                <input id="input-base-url" name="baseUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" data-i18n-placeholder="onboarding.baseUrlPlaceholderOpenai" placeholder="https://api.openai.com/v1">
+                <span class="field__hint" data-i18n="onboarding.baseUrlHint">程序会自动补上 /chat/completions 或 /messages；也可直接填完整接口地址。</span>
+              </label>
+              <label class="field" for="input-api-key">
+                <span class="field__label" data-i18n="onboarding.apiKeyLabel">API Key</span>
+                <span class="input-with-action">
+                  <input id="input-api-key" name="apiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-...">
+                  <button type="button" class="ghost-btn input-with-action__btn" id="btn-toggle-key" data-i18n="onboarding.showKey">显示</button>
+                </span>
+                <span class="field__hint" data-i18n="onboarding.apiKeyHint">只写入本机 localStorage，请求直接发往你填写的接口。</span>
+              </label>
+              <label class="field" for="input-model">
+                <span class="field__label" data-i18n="onboarding.modelLabel">模型</span>
+                <input id="input-model" name="model" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" list="model-suggestions" data-i18n-placeholder="onboarding.modelPlaceholder" placeholder="gpt-4o">
+                <datalist id="model-suggestions"></datalist>
+                <span class="field__hint" data-i18n="onboarding.modelHint">填写服务商提供的模型名或推理接入点 ID。</span>
+              </label>
+              <details class="advanced" id="onboarding-advanced">
+                <summary data-i18n="onboarding.advancedSummary">高级选项</summary>
+                <div class="advanced__body">
+                  <div class="field-row">
+                    <label class="field field--half" for="input-temperature">
+                      <span class="field__label" data-i18n="onboarding.temperatureLabel">温度</span>
+                      <input id="input-temperature" name="temperature" type="number" min="0" max="2" step="0.05" value="0.85">
+                      <span class="field__hint" data-i18n="onboarding.temperatureHint">越高越放飞，故事 0.7~1.0 为宜。</span>
+                    </label>
+                    <label class="field field--half" for="input-max-tokens">
+                      <span class="field__label" data-i18n="onboarding.maxTokensLabel">最大输出</span>
+                      <input id="input-max-tokens" name="maxTokens" type="number" min="64" max="32768" step="64" value="2048">
+                      <span class="field__hint" data-i18n="onboarding.maxTokensHint">单位 token，留空则用默认值。</span>
+                    </label>
+                  </div>
+                  <label class="field" for="input-extra-headers">
+                    <span class="field__label" data-i18n="onboarding.extraHeadersLabel">额外请求头（可选）</span>
+                    <textarea id="input-extra-headers" name="extraHeaders" rows="2" spellcheck="false" data-i18n-placeholder="onboarding.extraHeadersPlaceholder" placeholder='{"X-Custom": "value"}'></textarea>
+                    <span class="field__hint" data-i18n="onboarding.extraHeadersHint">JSON 对象格式；部分自建网关需要额外的鉴权头。</span>
+                  </label>
+                </div>
+              </details>
+              <p class="form-status" id="onboarding-status" role="status"></p>
+              <div class="form-actions">
+                <button type="button" class="btn btn--ghost" id="btn-test-connection" data-i18n="onboarding.testButton">测试连接</button>
+                <button type="submit" class="btn btn--primary" id="btn-save-config" data-i18n="onboarding.saveButton">保存并开始</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <!-- ============ 主页：择一卷 ============ -->
+        <section class="view view--home" id="view-home" aria-labelledby="home-title" hidden>
+          <div class="home">
+            <div class="home__hero">
+              <p class="kicker" data-i18n="home.kicker">卷首</p>
+              <h1 class="hero-title" id="home-title" data-i18n="brand.name">无尽文游</h1>
+              <p class="hero-title-en" data-i18n="brand.nameEn">APPEALING WORDS</p>
+              <p class="hero-slogan" data-i18n="brand.slogan">没有尽头的互动文字游戏</p>
+              <div class="api-state" id="home-api-status">
+                <span class="api-state__dot" aria-hidden="true"></span>
+                <span class="api-state__text" id="home-api-text"></span>
+                <button type="button" class="ghost-btn" id="btn-configure-api" data-i18n="home.configureButton">配置接口</button>
+              </div>
+            </div>
+            <div class="home__modes">
+              <div class="section-head">
+                <h2 class="section-title" data-i18n="home.modesLabel">择一卷，入一局</h2>
+                <p class="section-hint" data-i18n="home.modesHint">每一局都由你的模型即时推演，不会重复。</p>
+              </div>
+              <div class="mode-grid" id="mode-grid"></div>
+            </div>
+            <div class="home__recent">
+              <div class="section-head">
+                <h2 class="section-title" data-i18n="home.recentLabel">最近的旅程</h2>
+              </div>
+              <div class="recent-list" id="recent-list"></div>
+              <p class="recent-empty" id="recent-empty" data-i18n="home.recentEmpty">尚无存档。选一个模式，故事就开始了。</p>
+            </div>
+            <p class="home__foot" data-i18n="home.footerNote">全部内容由你的 AI 即时生成；密钥与会话只存于本机。</p>
+          </div>
+        </section>
+
+        <!-- ============ 游戏页 ============ -->
+        <section class="view view--game" id="view-game" aria-labelledby="game-mode-name" hidden>
+          <div class="game">
+            <header class="game-head">
+              <div class="game-head__left">
+                <span class="game-head__sigil" id="game-mode-sigil" aria-hidden="true">规</span>
+                <div class="game-head__titles">
+                  <h2 class="game-head__mode" id="game-mode-name">规则怪谈</h2>
+                  <p class="game-head__session" id="game-session-title"></p>
+                </div>
+              </div>
+              <div class="game-head__meta">
+                <span class="meta-pill" id="game-turn"></span>
+                <span class="meta-pill" id="game-provider"></span>
+                <button type="button" class="ghost-btn" id="btn-game-new" data-i18n="game.newSessionButton">另起一局</button>
+              </div>
+            </header>
+            <div class="game-body">
+              <div class="story-panel">
+                <div class="story-log" id="story-log" tabindex="0"></div>
+                <button type="button" class="skip-typing" id="btn-skip-typing" hidden data-i18n="game.skip">跳过动画</button>
+              </div>
+              <aside class="choices-panel">
+                <h3 class="choices-title" id="choices-title" data-i18n="game.choicesTitle">此刻，你如何选择？</h3>
+                <div class="choices-list" id="choices-list" role="group"></div>
+                <form class="free-form" id="free-form">
+                  <label class="sr-only" for="input-free-action" data-i18n="game.freePlaceholder">也可自行落笔，写下你的行动</label>
+                  <input id="input-free-action" type="text" autocomplete="off" maxlength="500" data-i18n-placeholder="game.freePlaceholder" placeholder="也可自行落笔，写下你的行动…">
+                  <button type="submit" class="btn btn--primary" id="btn-send-action" data-i18n="game.freeSend" data-i18n-aria="a11y.send">落笔</button>
+                </form>
+                <div class="game-actions">
+                  <button type="button" class="ghost-btn" id="btn-retry-turn" hidden data-i18n="game.retry">重试</button>
+                </div>
+                <p class="game-error" id="game-error" role="alert" hidden></p>
+                <p class="game-context" id="game-context"></p>
+              </aside>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="statusbar" id="statusbar">
+        <span class="statusbar__item" id="status-text" data-i18n="status.ready">静候</span>
+        <span class="statusbar__item statusbar__item--muted" id="status-device"></span>
+        <span class="statusbar__item statusbar__item--right" id="status-model"></span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ============ 设置 ============ -->
+  <div class="modal" id="modal-settings" hidden>
+    <div class="modal__backdrop" data-close-modal="settings"></div>
+    <div class="modal__panel modal__panel--wide" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header class="modal__head">
+        <h2 id="settings-title" data-i18n="settings.title">设置</h2>
+        <button type="button" class="icon-btn modal__close" data-close-modal="settings" data-i18n-aria="a11y.closeModal">✕</button>
+      </header>
+      <nav class="tabs" role="tablist">
+        <button type="button" class="tabs__btn is-active" data-settings-tab="api" data-i18n="settings.tabApi">接口</button>
+        <button type="button" class="tabs__btn" data-settings-tab="appearance" data-i18n="settings.tabAppearance">外观</button>
+        <button type="button" class="tabs__btn" data-settings-tab="data" data-i18n="settings.tabData">数据</button>
+        <button type="button" class="tabs__btn" data-settings-tab="about" data-i18n="settings.tabAbout">关于</button>
+      </nav>
+      <div class="modal__body">
+        <section class="tab-panel" data-settings-panel="api">
+          <p class="panel-hint" data-i18n="settings.apiSectionHint">接口配置与初次进入时相同，改完后保存即可。</p>
+          <div class="field">
+            <span class="field__label" data-i18n="onboarding.protocolLabel">接口格式</span>
+            <div class="segmented" id="settings-protocol-switch" role="group">
+              <button type="button" class="segmented__btn is-active" data-protocol="openai" data-i18n="onboarding.protocolOpenai">OpenAI 兼容</button>
+              <button type="button" class="segmented__btn" data-protocol="anthropic" data-i18n="onboarding.protocolAnthropic">Anthropic 格式</button>
+            </div>
+          </div>
+          <label class="field" for="set-base-url">
+            <span class="field__label" data-i18n="onboarding.baseUrlLabel">Base URL</span>
+            <input id="set-base-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" data-i18n-placeholder="onboarding.baseUrlPlaceholderOpenai">
+          </label>
+          <label class="field" for="set-api-key">
+            <span class="field__label" data-i18n="onboarding.apiKeyLabel">API Key</span>
+            <span class="input-with-action">
+              <input id="set-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-...">
+              <button type="button" class="ghost-btn input-with-action__btn" id="btn-toggle-set-key" data-i18n="onboarding.showKey">显示</button>
+            </span>
+          </label>
+          <label class="field" for="set-model">
+            <span class="field__label" data-i18n="onboarding.modelLabel">模型</span>
+            <input id="set-model" type="text" autocomplete="off" spellcheck="false" data-i18n-placeholder="onboarding.modelPlaceholder">
+          </label>
+          <div class="field-row">
+            <label class="field field--half" for="set-temperature">
+              <span class="field__label" data-i18n="onboarding.temperatureLabel">温度</span>
+              <input id="set-temperature" type="number" min="0" max="2" step="0.05">
+            </label>
+            <label class="field field--half" for="set-max-tokens">
+              <span class="field__label" data-i18n="onboarding.maxTokensLabel">最大输出</span>
+              <input id="set-max-tokens" type="number" min="64" max="32768" step="64">
+            </label>
+          </div>
+          <label class="field" for="set-extra-headers">
+            <span class="field__label" data-i18n="onboarding.extraHeadersLabel">额外请求头（可选）</span>
+            <textarea id="set-extra-headers" rows="2" spellcheck="false" data-i18n-placeholder="onboarding.extraHeadersPlaceholder"></textarea>
+          </label>
+          <p class="form-status" id="settings-api-status" role="status"></p>
+          <div class="form-actions">
+            <button type="button" class="btn btn--ghost" id="btn-test-settings" data-i18n="settings.testButton">测试连接</button>
+            <button type="button" class="btn btn--primary" id="btn-save-settings-api" data-i18n="settings.saveButton">保存</button>
+          </div>
+        </section>
+        <section class="tab-panel" data-settings-panel="appearance" hidden>
+          <label class="field" for="select-layout">
+            <span class="field__label" data-i18n="settings.layoutLabel">布局</span>
+            <select id="select-layout">
+              <option value="auto" data-i18n="settings.layoutAuto">自动（依设备）</option>
+              <option value="landscape" data-i18n="settings.layoutLandscape">横屏 2:1</option>
+              <option value="portrait" data-i18n="settings.layoutPortrait">竖屏 9:16</option>
+            </select>
+          </label>
+          <label class="field" for="select-speed">
+            <span class="field__label" data-i18n="settings.speedLabel">打字速度</span>
+            <select id="select-speed">
+              <option value="slow" data-i18n="settings.speedSlow">缓</option>
+              <option value="normal" data-i18n="settings.speedNormal">常</option>
+              <option value="fast" data-i18n="settings.speedFast">疾</option>
+              <option value="instant" data-i18n="settings.speedInstant">瞬</option>
+            </select>
+          </label>
+          <label class="field field--row" for="toggle-sound">
+            <span class="field__label" data-i18n="settings.soundLabel">打字机音效</span>
+            <input type="checkbox" id="toggle-sound" class="switch">
+            <span class="switch__state" id="sound-state" data-i18n="settings.soundOff">关</span>
+          </label>
+        </section>
+        <section class="tab-panel" data-settings-panel="data" hidden>
+          <p class="panel-hint" data-i18n="settings.dataHint">存档、接口配置与设置都只在本机。建议定期导出备份。</p>
+          <div class="form-actions form-actions--stack">
+            <button type="button" class="btn btn--ghost" id="btn-export-data" data-i18n="settings.exportButton">导出全部数据</button>
+            <label class="btn btn--ghost" for="input-import-data" data-i18n="settings.importButton">导入数据</label>
+            <input id="input-import-data" type="file" accept="application/json,.json" hidden>
+            <button type="button" class="btn btn--danger" id="btn-clear-data" data-i18n="settings.clearButton">清空所有数据</button>
+          </div>
+        </section>
+        <section class="tab-panel" data-settings-panel="about" hidden>
+          <h3 class="about-title" data-i18n="settings.aboutTitle">无尽文游</h3>
+          <p data-i18n="settings.aboutDesc">没有尽头的互动文字游戏。</p>
+          <p data-i18n="settings.aboutStack">原生 HTML / CSS / JS，零后端，可直接部署在 GitHub Pages。</p>
+          <p data-i18n="settings.aboutPrivacy">密钥只保存在本机 localStorage，请求直接发往你填写的接口。</p>
+          <p class="about-device" id="about-device"></p>
+          <p class="about-version" id="about-version"></p>
+          <div class="about-links">
+            <a href="https://github.com/Nolai2010/AppealingWords" target="_blank" rel="noopener" data-i18n="settings.aboutRepo">GitHub 仓库</a>
+            <a href="https://github.com/Nolai2010/AppealingWords/issues" target="_blank" rel="noopener" data-i18n="settings.aboutIssues">反馈问题</a>
+          </div>
+          <p class="about-credits">Fusion Pixel Font（OFL-1.1）· KaTeX（MIT）· Marked（MIT）· DOMPurify（MPL-2.0 / Apache-2.0）</p>
+          <p class="about-license">MIT License © 2026 Nolai2010</p>
+        </section>
+      </div>
+      <footer class="modal__foot">
+        <button type="button" class="btn btn--ghost" data-close-modal="settings" data-i18n="settings.closeButton">关闭</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ============ 档案室 ============ -->
+  <div class="modal" id="modal-sessions" hidden>
+    <div class="modal__backdrop" data-close-modal="sessions"></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="sessions-title">
+      <header class="modal__head">
+        <h2 id="sessions-title" data-i18n="sessions.title">档案室</h2>
+        <span class="modal__count" id="sessions-count"></span>
+        <button type="button" class="icon-btn modal__close" data-close-modal="sessions" data-i18n-aria="a11y.closeModal">✕</button>
+      </header>
+      <div class="modal__body">
+        <div class="session-list" id="session-list"></div>
+        <p class="recent-empty" id="sessions-empty" data-i18n="sessions.empty">空空如也。</p>
+      </div>
+      <footer class="modal__foot">
+        <button type="button" class="btn btn--ghost" data-close-modal="sessions" data-i18n="sessions.close">关闭</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ============ 确认框 ============ -->
+  <div class="modal modal--confirm" id="modal-confirm" hidden>
+    <div class="modal__backdrop" data-close-modal="confirm"></div>
+    <div class="modal__panel modal__panel--narrow" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <h2 class="confirm-title" id="confirm-title" data-i18n="confirm.title">确认</h2>
+      <p class="confirm-message" id="confirm-message"></p>
+      <div class="form-actions">
+        <button type="button" class="btn btn--ghost" id="btn-confirm-cancel" data-i18n="confirm.cancel">取消</button>
+        <button type="button" class="btn btn--danger" id="btn-confirm-ok" data-i18n="confirm.ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <div id="live-region" class="sr-only" aria-live="polite"></div>
+
+  <noscript>
+    <div class="noscript">本作需要 JavaScript 才能运行。/ This game requires JavaScript.</div>
+  </noscript>
+</body>
+</html>
