@@ -5,11 +5,15 @@
  * v1.0 基线：dev/contracts.md §8 的 T1~T14（含四张固定截图）。
  * v1.1 增量：dev/contracts-v1.1.md §7
  *   T0  静态基线：guide.js 契约 / i18n PROVIDER_PRESETS（DeepSeek=deepseek-flash）/
- *       index.html 新钩子 / README 中英互链 / store.js APP_VERSION=1.1.0（Node 阶段，无浏览器）
+ *       index.html 新钩子 / README 中英互链 / store.js APP_VERSION=1.1.1（Node 阶段，无浏览器）
  *   T1G 引导页教程区：.guide-step ≥3 / .guide-concept ≥3 / .provider-card ≥8 + 外链窗口属性
  *       点 DeepSeek 卡「填入本页」→ baseUrl/model/协议正确；chips 里 DeepSeek 预设 = deepseek-flash；
  *       #btn-open-guide 打开 #modal-guide 且内容非空、可关闭
- *   T15 设置入口打开教程弹窗 + 设置→关于显示 1.1.0
+ *   T15 设置入口打开教程弹窗 + 设置→关于显示 1.1.1
+ *   T16 v1.1.1 移动端布局识别回归：
+ *       a. 桌面 UA + 触屏 + 390×844 → device=mobile / layout=portrait / 舞台比例≈0.5625
+ *       b. 手机 UA + 844×390（横握） → device=mobile / layout=landscape / 比例≈2
+ *       c. 正常桌面 1440×720 → device=desktop / layout=landscape / 比例=2
  *
  * 截图（文件名与尺寸 v1.0 不变）：
  *   docs/screenshots/onboarding-landscape.png  1440×720
@@ -457,6 +461,74 @@ async function assertGuideModalOpens(p, openerSelector) {
 }
 
 // ---------------------------------------------------------------------------
+// v1.1.1 布局识别回归辅助
+// ---------------------------------------------------------------------------
+
+/** 一次性应用「视口尺寸 + UA + 触屏」组合（不重载页面）。 */
+async function applyEmulatedDevice(p, { width, height, userAgent, platform, touch, mobile }) {
+  await p.session.setUserAgent(userAgent, { platform });
+  await p.session.send('Emulation.setDeviceMetricsOverride', {
+    width,
+    height,
+    deviceScaleFactor: 1,
+    mobile: Boolean(mobile),
+    screenOrientation: {
+      type: width >= height ? 'landscapePrimary' : 'portraitPrimary',
+      angle: width >= height ? 90 : 0,
+    },
+  });
+  await p.session
+    .send('Emulation.setTouchEmulationEnabled', { enabled: Boolean(touch), maxTouchPoints: touch ? 5 : 0 })
+    .catch(() => {});
+  await sleep(80);
+}
+
+async function readLayoutState(p) {
+  return p.run(`
+    const root = document.documentElement;
+    const el = document.querySelector('.app-frame') || document.querySelector('#app');
+    const rect = el ? el.getBoundingClientRect() : null;
+    return {
+      device: root.getAttribute('data-device') || root.dataset.device || null,
+      layout: root.getAttribute('data-layout') || root.dataset.layout || null,
+      ratio: rect && rect.height ? rect.width / rect.height : null,
+      rect: rect ? { width: Math.round(rect.width), height: Math.round(rect.height) } : null,
+      inner: { width: window.innerWidth, height: window.innerHeight },
+      touchPoints: navigator.maxTouchPoints || 0,
+      coarse: Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches),
+      ua: navigator.userAgent,
+      env: window.__APPEALING_ENV__ || null,
+    };
+  `);
+}
+
+/**
+ * 模拟一种设备组合（重载页面，让 layout-boot.js 在文档加载时执行），
+ * 断言 data-device / data-layout / 舞台宽高比。
+ */
+async function assertLayoutCase(p, { name, width, height, userAgent, platform, touch, mobile, expect }) {
+  await applyEmulatedDevice(p, { width, height, userAgent, platform, touch, mobile });
+  await reloadApp(p);
+  await p.wait('!!document.documentElement.getAttribute("data-layout")', `${name}：data-layout 已写入`, 15000);
+  const state = await readLayoutState(p);
+  const context = JSON.stringify({
+    inner: state.inner,
+    touchPoints: state.touchPoints,
+    coarse: state.coarse,
+    ua: state.ua.slice(0, 90),
+  });
+  eq(state.device, expect.device, `${name}：data-device 应为 ${expect.device}（${context}）`);
+  eq(state.layout, expect.layout, `${name}：data-layout 应为 ${expect.layout}（${context}）`);
+  truthy(state.ratio, `${name}：找不到 .app-frame 舞台元素`);
+  assert(
+    Math.abs(state.ratio - expect.ratio) <= 0.03,
+    `${name}：舞台宽高比应 ≈ ${expect.ratio.toFixed(4)} ±0.03，实际 ${state.ratio?.toFixed(4)}（rect=${JSON.stringify(state.rect)}，inner=${JSON.stringify(state.inner)}）`,
+  );
+  if (typeof expect.check === 'function') expect.check(state);
+  return state;
+}
+
+// ---------------------------------------------------------------------------
 // 截图
 // ---------------------------------------------------------------------------
 
@@ -738,7 +810,7 @@ async function main() {
   // =========================================================================
   // T0 v1.1 静态基线（Node 阶段，不需要浏览器）
   // =========================================================================
-  await step('T0 §7 静态基线：guide.js 契约 / PROVIDER_PRESETS(DeepSeek=deepseek-flash) / index 钩子 / README 中英互链 / APP_VERSION=1.1.0', async () => {
+  await step('T0 §7 静态基线：guide.js 契约 / PROVIDER_PRESETS(DeepSeek=deepseek-flash) / index 钩子 / README 中英互链 / APP_VERSION=1.1.1', async () => {
     const result = await runStaticChecks({ root: REPO_ROOT });
     const failed = result.checks.filter((check) => !check.ok);
     console.log(`[qa] 静态检查 ${result.checks.length} 项：PASS ${result.checks.length - failed.length}，FAIL ${failed.length}`);
@@ -1712,9 +1784,9 @@ async function main() {
   });
 
   // =========================================================================
-  // v1.1 §7 T-新4（入口二）+ T-新5：设置里的教程入口 + 关于版本 1.1.0
+  // v1.1 §7 T-新4（入口二）+ T-新5：设置里的教程入口 + 关于版本 1.1.1
   // =========================================================================
-  await step('T15 §7 教程弹窗（设置入口 #btn-open-guide-settings）+ 设置→关于显示 1.1.0', async () => {
+  await step('T15 §7 教程弹窗（设置入口 #btn-open-guide-settings）+ 设置→关于显示 1.1.1', async () => {
     await setDesktop(P);
     await writeStore(P, makeStore({ settings: makeSettings() }));
     await reloadApp(P);
@@ -1735,7 +1807,7 @@ async function main() {
       await P.wait('!!document.querySelector("#modal-settings") && __vis(document.querySelector("#modal-settings"))', '设置弹窗重新可见', 10000);
     }
 
-    // 设置 → 关于：版本 1.1.0
+    // 设置 → 关于：版本 1.1.1
     const aboutClicked = await P.click('[data-settings-tab="about"]');
     assert(aboutClicked, '点击设置「关于」tab 失败');
     await sleep(150);
@@ -1750,14 +1822,93 @@ async function main() {
       };
     `);
     assert(
-      /1\.1\.0/.test(aboutInfo.modalText) || /1\.1\.0/.test(aboutInfo.panelText),
-      `设置→关于未显示版本 1.1.0（panelText=${JSON.stringify(aboutInfo.panelText.slice(0, 300))}）`,
+      /1\.1\.1/.test(aboutInfo.modalText) || /1\.1\.1/.test(aboutInfo.panelText),
+      `设置→关于未显示版本 1.1.1（panelText=${JSON.stringify(aboutInfo.panelText.slice(0, 300))}）`,
     );
     if (aboutInfo.versionText) {
-      includes(aboutInfo.versionText, '1.1.0', '#about-version 未显示 1.1.0');
+      includes(aboutInfo.versionText, '1.1.1', '#about-version 未显示 1.1.1');
     }
     console.log(`[qa] 设置→关于版本文案：${JSON.stringify(aboutInfo.versionText || aboutInfo.panelText.slice(0, 120))}`);
   });
+
+  // =========================================================================
+  // v1.1.1 T16 移动端布局识别回归（桌面 UA+触屏 / 手机横握 / 正常桌面）
+  // =========================================================================
+  await step(
+    'T16 v1.1.1 移动端布局识别回归：桌面UA+触屏+390×844→portrait/0.563；手机UA+844×390→landscape/2；桌面1440×720→landscape/2',
+    async () => {
+      await writeStore(P, makeStore({ settings: makeSettings({ layout: 'auto' }) }));
+
+      // c. 正常桌面 1440×720
+      const desktopState = await assertLayoutCase(P, {
+        name: '正常桌面 1440×720',
+        width: 1440,
+        height: 720,
+        userAgent: DESKTOP_UA,
+        platform: 'Win32',
+        touch: false,
+        mobile: false,
+        expect: { device: 'desktop', layout: 'landscape', ratio: 2 },
+      });
+
+      // a. 桌面 UA + 触屏 + 390×844（应用内浏览器 / 手机浏览器「桌面模式」误报桌面 UA 的场景）
+      const phoneDesktopUa = await assertLayoutCase(P, {
+        name: '桌面UA+触屏+390×844',
+        width: 390,
+        height: 844,
+        userAgent: DESKTOP_UA,
+        platform: 'Win32',
+        touch: true,
+        mobile: true,
+        expect: {
+          device: 'mobile',
+          layout: 'portrait',
+          ratio: 9 / 16,
+          check: (state) => {
+            assert(!/iPhone|Android|Mobile/i.test(state.ua), `该场景 UA 不应是移动 UA：${state.ua.slice(0, 90)}`);
+            assert(state.touchPoints > 0 || state.coarse, `触屏模拟未生效（touchPoints=${state.touchPoints}, coarse=${state.coarse}）`);
+            assert(state.env && state.env.boot === true, 'layout-boot.js 未在文档加载时执行（window.__APPEALING_ENV__ 缺失）');
+          },
+        },
+      });
+
+      // b. 手机 UA + 844×390（手机横握 → 自动 2:1）
+      const phoneLandscape = await assertLayoutCase(P, {
+        name: '手机UA+844×390横握',
+        width: 844,
+        height: 390,
+        userAgent: IPHONE_UA,
+        platform: 'iPhone',
+        touch: true,
+        mobile: true,
+        expect: {
+          device: 'mobile',
+          layout: 'landscape',
+          ratio: 2,
+          check: (state) => assert(/iPhone/i.test(state.ua), `手机 UA 未生效：${state.ua.slice(0, 90)}`),
+        },
+      });
+
+      // 恢复桌面尺寸/UA，保持环境干净
+      await setDesktop(P);
+      await reloadApp(P);
+
+      // T15/T16 期间的 console error 也纳入 §8.14 口径（T13 已在前面检查到 T12）
+      const filteredErrors = consoleErrors.filter((entry) => !isIgnoredConsoleError(entry));
+      if (filteredErrors.length > 0) {
+        throw new Error(
+          `T16 后存在 ${filteredErrors.length} 条未过滤 console error：\n${filteredErrors
+            .slice(0, 8)
+            .map((entry) => `- [${entry.source}] ${entry.text.slice(0, 240)}`)
+            .join('\n')}`,
+        );
+      }
+
+      console.log(
+        `[qa] 布局回归比例：桌面 ${desktopState.ratio.toFixed(4)}；桌面UA触屏手机 ${phoneDesktopUa.ratio.toFixed(4)}；手机横握 ${phoneLandscape.ratio.toFixed(4)}`,
+      );
+    },
+  );
 }
 
 let exitCode = 0;

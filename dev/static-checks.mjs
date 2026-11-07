@@ -7,7 +7,9 @@
  *   §4   i18n.js 新 key 成对 + 占位符一致 + PROVIDER_PRESETS 顺序与取值
  *   §5   README.md / README.en.md 存在、顶部互链、引用 4 张既有截图
  *   §6   index.html 新钩子（#guide-steps/#guide-concepts/#guide-providers/#guide-faq/#modal-guide 等）
- *   §8   store.js APP_VERSION = '1.1.0'
+ *   §8   store.js APP_VERSION = '1.1.1'
+ *   v1.1.1 hotfix：layout-boot.js / legacy-notice.js 存在且 index.html 中 layout-boot 早于 CSS、legacy-notice 为 nomodule；
+ *          app.js 含触屏/coarse + 窄视口识别与 resize 接管
  *
  * 用法：
  *   import { runStaticChecks } from './static-checks.mjs';
@@ -190,6 +192,8 @@ export async function runStaticChecks({ root = REPO_ROOT } = {}) {
     i18n: path.join(root, 'assets', 'js', 'i18n.js'),
     guide: path.join(root, 'assets', 'js', 'guide.js'),
     store: path.join(root, 'assets', 'js', 'store.js'),
+    layoutBoot: path.join(root, 'assets', 'js', 'layout-boot.js'),
+    legacyNotice: path.join(root, 'assets', 'js', 'legacy-notice.js'),
     readmeZh: path.join(root, 'README.md'),
     readmeEn: path.join(root, 'README.en.md'),
   };
@@ -201,14 +205,32 @@ export async function runStaticChecks({ root = REPO_ROOT } = {}) {
     add(`文件存在：${rel(filePath)}`, existence[key], `${rel(filePath)} 不存在`);
   }
 
-  // ---- 1. store.js APP_VERSION = 1.1.0（契约 §8）----
+  // ---- 1. store.js APP_VERSION = 1.1.1（契约 §8 / v1.1.1 hotfix）----
   if (existence.store) {
     const source = (await readTextSafe(files.store)) || '';
     const match = /APP_VERSION\s*=\s*['"]([^'"]+)['"]/.exec(source);
     add(
-      "store.js APP_VERSION = '1.1.0'（契约 §8）",
-      match?.[1] === '1.1.0',
+      "store.js APP_VERSION = '1.1.1'（契约 §8）",
+      match?.[1] === '1.1.1',
       match ? `实际为 ${JSON.stringify(match[1])}` : '未找到 APP_VERSION 常量',
+    );
+  }
+
+  // ---- 1b. v1.1.1 移动端布局 hotfix 静态保障 ----
+  if (existence.layoutBoot) {
+    const source = (await readTextSafe(files.layoutBoot)) || '';
+    add(
+      'layout-boot.js 为经典 ES5 脚本（无 => / const / let / import / export）',
+      !/=>|\bconst\b|\blet\b|\bimport\b|\bexport\b/.test(source),
+      '发现 ES6+ 语法标记（该脚本必须在 CSS 前同步执行，需 ES5）',
+    );
+    add(
+      'layout-boot.js 写 data-device / data-layout 并兼容 localStorage 手动布局',
+      /data-device/.test(source) && /data-layout/.test(source) && /settings/.test(source) && /layout/.test(source),
+    );
+    add(
+      'layout-boot.js 含触屏/coarse + 窄视口(≤820)兜底判端逻辑',
+      /maxTouchPoints/.test(source) && /pointer:\s*coarse/.test(source) && /820/.test(source),
     );
   }
 
@@ -398,6 +420,22 @@ export async function runStaticChecks({ root = REPO_ROOT } = {}) {
       /data-close-modal\s*=\s*["']guide["']/.test(indexSource),
       '未找到 data-close-modal="guide"',
     );
+    // ---- v1.1.1 hotfix：layout-boot 必须在 CSS 之前；legacy-notice 用 nomodule ----
+    const headSource = indexSource.split(/<\/head>/i)[0] || indexSource;
+    const layoutBootTag = /<script[^>]*src=["']assets\/js\/layout-boot\.js["'][^>]*>/i.exec(headSource)?.[0] || '';
+    const layoutBootIndex = layoutBootTag ? headSource.indexOf(layoutBootTag) : -1;
+    const firstStylesheetIndex = headSource.search(/<link[^>]*rel=["']stylesheet["']/i);
+    add(
+      'index.html 在 CSS 之前同步加载 layout-boot.js（移动端布局兜底）',
+      Boolean(layoutBootTag) && firstStylesheetIndex !== -1 && layoutBootIndex !== -1 && layoutBootIndex < firstStylesheetIndex,
+      `layout-boot 位置=${layoutBootIndex}，首个 stylesheet 位置=${firstStylesheetIndex}`,
+    );
+    const legacyNoticeTag = /<script[^>]*src=["']assets\/js\/legacy-notice\.js["'][^>]*>/i.exec(headSource)?.[0] || '';
+    add(
+      'index.html 的 legacy-notice.js 带 nomodule（旧浏览器提示）',
+      Boolean(legacyNoticeTag) && /nomodule/i.test(legacyNoticeTag),
+      legacyNoticeTag ? `实际标签：${legacyNoticeTag}` : '未找到 legacy-notice.js 标签',
+    );
     const i18nKeys = new Set();
     for (const match of indexSource.matchAll(/data-i18n(?:-aria|-placeholder|-title)?\s*=\s*["']([^"']+)["']/g)) {
       i18nKeys.add(match[1]);
@@ -424,6 +462,14 @@ export async function runStaticChecks({ root = REPO_ROOT } = {}) {
       'app.js 绑定教程入口 #btn-open-guide 与 #modal-guide',
       /btn-open-guide/.test(appSource) && /modal-guide/.test(appSource),
       '未在 app.js 中找到 btn-open-guide / modal-guide 处理',
+    );
+    add(
+      'app.js 布局识别已增强并接管 resize/orientationchange（触屏+窄视口 / __APPEALING_APP_READY__）',
+      /maxTouchPoints/.test(appSource) &&
+        /pointer:\s*coarse/.test(appSource) &&
+        /__APPEALING_APP_READY__/.test(appSource) &&
+        /orientationchange/.test(appSource),
+      '未在 app.js 中找到触屏/窄视口/resize 接管逻辑',
     );
   }
 

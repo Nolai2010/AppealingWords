@@ -75,8 +75,18 @@ async function buildFixture() {
   await fsp.mkdir(assets, { recursive: true });
   await fsp.mkdir(path.join(TMP, 'docs', 'screenshots'), { recursive: true });
 
-  // store.js
-  await fsp.writeFile(path.join(assets, 'store.js'), "export const APP_VERSION = '1.1.0';\n");
+  // store.js（v1.1.1）
+  await fsp.writeFile(path.join(assets, 'store.js'), "export const APP_VERSION = '1.1.1';\n");
+
+  // v1.1.1 hotfix 文件
+  await fsp.writeFile(
+    path.join(assets, 'layout-boot.js'),
+    `(function () {\n  var root = document.documentElement;\n  var STORAGE_KEY = 'appealingwords.v1';\n  function readSettings() { try { return (JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}).settings || {}; } catch (err) { return {}; } }\n  function hasTouch() { return (navigator.maxTouchPoints || 0) > 0; }\n  function isCoarse() { try { return window.matchMedia('(pointer: coarse)').matches; } catch (err) { return false; } }\n  function detect() { var ua = navigator.userAgent || ''; var mobileUa = /Android|iPhone|Mobile/i.test(ua); var narrow = window.innerWidth > 0 && window.innerWidth <= 820; return mobileUa || ((hasTouch() || isCoarse()) && narrow) ? 'mobile' : 'desktop'; }\n  function apply() { var settings = readSettings(); var device = detect(); var layout = settings.layout === 'portrait' || settings.layout === 'landscape' ? settings.layout : device === 'mobile' ? (window.innerHeight >= window.innerWidth ? 'portrait' : 'landscape') : 'landscape'; root.setAttribute('data-device', device); root.setAttribute('data-layout', layout); window.__APPEALING_ENV__ = { device: device, layout: layout, boot: true }; }\n  apply();\n  window.addEventListener('resize', apply);\n})();\n`,
+  );
+  await fsp.writeFile(
+    path.join(assets, 'legacy-notice.js'),
+    "(function () { document.documentElement.setAttribute('data-legacy', '1'); })();\n",
+  );
 
   // i18n.js
   const presets = PROVIDER_ORDER.map((id) => {
@@ -151,20 +161,28 @@ async function buildFixture() {
     `import { GUIDE_STEPS, GUIDE_CONCEPTS, GUIDE_PROVIDERS, GUIDE_FAQ } from './guide.js';\n` +
       `export function boot() {\n` +
       `  const guideSteps = GUIDE_STEPS;\n` +
+      `  const hasTouch = (navigator.maxTouchPoints || 0) > 0;\n` +
+      `  const coarse = window.matchMedia('(pointer: coarse)').matches;\n` +
+      `  window.__APPEALING_APP_READY__ = true;\n` +
+      `  window.addEventListener('orientationchange', function () { return [hasTouch, coarse]; });\n` +
       `  document.querySelector('#btn-open-guide')?.addEventListener('click', () => { document.querySelector('#modal-guide').hidden = false; });\n` +
       `  return [guideSteps, GUIDE_CONCEPTS, GUIDE_PROVIDERS, GUIDE_FAQ];\n` +
       `}\n`,
   );
 
-  // index.html
+  // index.html（v1.1.1：layout-boot 在 CSS 之前；legacy-notice nomodule）
   const ids = REQUIRED_INDEX_IDS.map((id) => `<div id="${id}"></div>`).join('\n');
   await fsp.writeFile(
     path.join(TMP, 'index.html'),
-    `<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8"><title>qa fixture</title></head>\n<body>\n` +
+    `<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>qa fixture</title>\n` +
+      `<script src="assets/js/layout-boot.js"></script>\n` +
+      `<script nomodule src="assets/js/legacy-notice.js"></script>\n` +
+      `<link rel="stylesheet" href="assets/css/style.css">\n` +
+      `</head>\n<body>\n` +
       `${ids}\n` +
       `<button type="button" data-close-modal="guide">x</button>\n` +
       `<span data-i18n="meta.title"></span>\n<span data-i18n="guide.title"></span>\n` +
-      `</body></html>\n`,
+      `</body>\n</html>\n`,
   );
 
   // README 双文件 + 截图占位文件
@@ -234,7 +252,26 @@ try {
     await buildFixture();
   }
 
-  // ---- 场景 6：恢复后再次全通过（确认夹具状态可重复）----
+  // ---- 场景 6：APP_VERSION 未升到 1.1.1 ----
+  {
+    const storePath = path.join(TMP, 'assets', 'js', 'store.js');
+    await fsp.writeFile(storePath, "export const APP_VERSION = '1.1.0';\n");
+    const result = await runStaticChecks({ root: TMP });
+    ok(!result.ok, '破坏 APP_VERSION：静态检查应失败');
+    contains(result.failures.join('\n'), "APP_VERSION = '1.1.1'", '破坏 APP_VERSION：定位到具体项');
+    await buildFixture();
+  }
+
+  // ---- 场景 7：layout-boot.js 缺失 ----
+  {
+    await fsp.rm(path.join(TMP, 'assets', 'js', 'layout-boot.js'));
+    const result = await runStaticChecks({ root: TMP });
+    ok(!result.ok, '缺少 layout-boot.js：静态检查应失败');
+    contains(result.failures.join('\n'), '文件存在：assets/js/layout-boot.js', '缺少 layout-boot：定位到具体项');
+    await buildFixture();
+  }
+
+  // ---- 场景 8：恢复后再次全通过（确认夹具状态可重复）----
   {
     const result = await runStaticChecks({ root: TMP });
     ok(result.ok, '恢复夹具：静态检查再次全部 PASS', JSON.stringify(result.failures.slice(0, 8)));

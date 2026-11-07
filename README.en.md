@@ -254,7 +254,8 @@ dev/                    Mock API server + headless browser E2E tests (dev only, 
 - Added a "first time with an API" tutorial: three setup steps, three terms in plain words, eight provider cards with one-click fill-in, and the full guide available from Settings.
 - Updated model presets and examples: DeepSeek `deepseek-flash`, Kimi `kimi-k3.1-pro`, Qwen `qwen3.8-max`, Zhipu `glm-5.3`, Doubao `doubao-seed-2-0-code`, OpenAI `gpt-6.1-terra` / `gpt-6-astra`, Anthropic `claude-sonnet-5-5` / `claude-opus-5-5`, OpenRouter `openrouter/auto`.
 - Split the README into Chinese (`README.md`) and English (`README.en.md`), with a switcher at the top of both.
-- Polished the setup layout, the guide modal and the settings entry; version bumped to 1.1.0.
+- Polished the setup layout, the guide modal and the settings entry; version bumped to the 1.1 series (currently 1.1.1).
+- **Mobile layout fallback**: in-app browsers and "desktop mode" on phones now still get the 9:16 portrait stage based on viewport and touch input, switching to 2:1 when the phone is held sideways.
 - Kept every v1.0 feature: four genres, streaming typewriter, multiple saves, import/export, Chinese/English switching.
 
 ## Credits and license

@@ -128,20 +128,44 @@ function refreshDynamicTexts() {
  * 布局 / 设备识别（User-Agent）
  * ============================================================ */
 
+function isCoarsePointer() {
+  try {
+    return Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  } catch (err) {
+    return false;
+  }
+}
+
 function detectDevice() {
   const ua = navigator.userAgent || '';
   const isMobileUa =
-    /Android|iPhone|iPod|iPad|Windows Phone|Mobile|HarmonyOS|OpenHarmony|MicroMessenger|MiuiBrowser|HuaweiBrowser|Mobile Safari/i.test(
+    /Android|iPhone|iPod|iPad|Windows Phone|Mobile|HarmonyOS|OpenHarmony|MicroMessenger|MiuiBrowser|HuaweiBrowser|ArkWeb|Silk|Kindle|BlackBerry|Opera Mini|IEMobile/i.test(
       ua
     );
   const isIpadOs = /Macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) > 1;
-  ui.device = isMobileUa || isIpadOs ? 'mobile' : 'desktop';
+  const hasTouch = (navigator.maxTouchPoints || 0) > 0;
+  const viewportWidth = window.innerWidth || 0;
+  const screenWidth = (window.screen && window.screen.width) || 0;
+  const narrowViewport =
+    (viewportWidth > 0 && viewportWidth <= 820) || (screenWidth > 0 && screenWidth <= 820);
+  // 应用内浏览器 / 手机浏览器「桌面模式」可能上报桌面 UA，但仍有触屏且视口窄：
+  // 这类情况也按移动端处理，避免 2:1 舞台在手机上被挤成一条。
+  ui.device =
+    isMobileUa || isIpadOs || ((hasTouch || isCoarsePointer()) && narrowViewport)
+      ? 'mobile'
+      : 'desktop';
 }
 
 function currentLayout() {
   const settings = store.getSettings();
   if (settings.layout === 'landscape' || settings.layout === 'portrait') return settings.layout;
-  return ui.device === 'mobile' ? 'portrait' : 'landscape';
+  if (ui.device === 'mobile') {
+    // 竖握手机 → 9:16；横握手机 → 2:1，避免竖屏舞台在横屏里缩放得很小
+    return window.innerHeight >= window.innerWidth ? 'portrait' : 'landscape';
+  }
+  // 桌面端：窗口很窄且竖长时也照顾可读性
+  if (window.innerWidth < 520 && window.innerHeight > window.innerWidth) return 'portrait';
+  return 'landscape';
 }
 
 function applyLayout() {
@@ -151,6 +175,11 @@ function applyLayout() {
   if (deviceEl) deviceEl.textContent = currentLayout() === 'portrait' ? '9:16' : '2:1';
   updateAboutTexts();
   if (typeof applyGuideFolding === 'function') applyGuideFolding();
+}
+
+function handleViewportChange() {
+  detectDevice();
+  applyLayout();
 }
 
 /* ============================================================
@@ -1955,6 +1984,17 @@ function bindEvents() {
   window.addEventListener('beforeunload', () => {
     abortStream(true);
   });
+
+  let viewportTimer = 0;
+  const onViewportChange = () => {
+    if (viewportTimer) window.clearTimeout(viewportTimer);
+    viewportTimer = window.setTimeout(() => {
+      viewportTimer = 0;
+      handleViewportChange();
+    }, 140);
+  };
+  window.addEventListener('resize', onViewportChange);
+  window.addEventListener('orientationchange', onViewportChange);
 }
 
 /* ============================================================
@@ -1995,6 +2035,7 @@ export function boot() {
   ui.lang = store.getSettings().lang;
   applyI18n();
   applyLayout();
+  window.__APPEALING_APP_READY__ = true;
   bindEvents();
   initOnboarding();
   fillConfigFields('set-', store.getConfig());
